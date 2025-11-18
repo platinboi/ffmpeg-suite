@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Temporary files
+temp/
+*.tmp
+*.log
+
+# Sensitive data (will be created on first run)
+data/
+
+# UI/Frontend (not needed in backend container)
+ui/
+overlay-ui/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Railway
+railway.toml
+
+# Environment
+.env
+.env.local

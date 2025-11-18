@@ -1,0 +1,17 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[env]
+# Railway will automatically set PORT
+# Add custom environment variables here if needed
+# MAX_FILE_SIZE = "104857600"  # 100MB in bytes
+# UPLOAD_TIMEOUT = "30"
+# R2_ENABLED = "false"
