@@ -457,9 +457,9 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Detect which inputs have audio streams AND get video resolutions AND durations
+            # Detect which inputs have audio streams and durations
+            # NOTE: Videos are pre-scaled to same resolution before merge, so no scaling needed
             has_audio = []
-            resolutions = []  # List of (width, height) tuples
             durations = []  # List of video durations in seconds
             for input_path in input_paths:
                 media_info = FFmpegService.get_media_info(input_path)
@@ -473,12 +473,7 @@ class FFmpegService:
                             break
                 has_audio.append(audio_stream_exists)
 
-                # Get video resolution
-                width = FFmpegService._get_video_width(media_info)
-                height = FFmpegService._get_video_height(media_info)
-                resolutions.append((width, height))
-
-                # Get video duration
+                # Get video duration (needed for silent audio generation)
                 duration = None
                 if 'format' in media_info and 'duration' in media_info['format']:
                     try:
@@ -488,101 +483,35 @@ class FFmpegService:
                 durations.append(duration)
 
             logger.info(f"Audio stream detection: {has_audio}")
-            logger.info(f"Video resolutions: {resolutions}")
             logger.info(f"Video durations: {durations}")
-
-            # Determine target resolution (use first clip's resolution)
-            target_width, target_height = resolutions[0]
-            if target_width is None or target_height is None:
-                raise ValueError("Could not determine resolution of first video clip")
-
-            # Check if all resolutions match
-            resolutions_match = all(
-                w == target_width and h == target_height
-                for w, h in resolutions
-            )
-            logger.info(f"Target resolution: {target_width}x{target_height}, All match: {resolutions_match}")
 
             # Determine audio handling strategy
             all_have_audio = all(has_audio)
             none_have_audio = not any(has_audio)
 
             if none_have_audio:
-                # No audio in any clip - video-only concat with scaling
-                filter_parts = []
-                scaled_inputs = []
-
-                for i in range(len(input_paths)):
-                    if not resolutions_match:
-                        # Scale video to target resolution
-                        filter_parts.append(
-                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
-                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
-                        )
-                        scaled_inputs.append(f"[v{i}]")
-                    else:
-                        # No scaling needed
-                        scaled_inputs.append(f"[{i}:v]")
-
-                # Build filter
-                if filter_parts:
-                    filter_str = ";".join(filter_parts) + ";"
-                else:
-                    filter_str = ""
-
-                concat_input = "".join(scaled_inputs)
-                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=0[v]"
+                # No audio in any clip - simple video-only concat
+                concat_inputs = "".join([f"[{i}:v]" for i in range(len(input_paths))])
+                concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=0[v]"
                 map_args = ['-map', '[v]']
                 logger.info("Using video-only concat (no audio streams)")
 
             elif all_have_audio:
-                # All clips have audio - concat with scaling
-                filter_parts = []
-                scaled_inputs = []
-
-                for i in range(len(input_paths)):
-                    if not resolutions_match:
-                        # Scale video to target resolution
-                        filter_parts.append(
-                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
-                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
-                        )
-                        scaled_inputs.append(f"[v{i}][{i}:a]")
-                    else:
-                        # No scaling needed
-                        scaled_inputs.append(f"[{i}:v][{i}:a]")
-
-                # Build filter
-                if filter_parts:
-                    filter_str = ";".join(filter_parts) + ";"
-                else:
-                    filter_str = ""
-
-                concat_input = "".join(scaled_inputs)
-                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=1[v][a]"
+                # All clips have audio - simple video+audio concat
+                concat_inputs = "".join([f"[{i}:v][{i}:a]" for i in range(len(input_paths))])
+                concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=1[v][a]"
                 map_args = ['-map', '[v]', '-map', '[a]']
                 logger.info("Using standard concat (all clips have audio)")
 
             else:
-                # Mixed audio - add silent audio to clips without audio AND scale videos
+                # Mixed audio - add silent audio to clips without audio
                 filter_parts = []
                 inputs_with_audio = []
 
-                for i, input_path in enumerate(input_paths):
-                    # Handle video scaling
-                    if not resolutions_match:
-                        filter_parts.append(
-                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
-                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
-                        )
-                        video_label = f"[v{i}]"
-                    else:
-                        video_label = f"[{i}:v]"
-
-                    # Handle audio
+                for i in range(len(input_paths)):
                     if has_audio[i]:
                         # Clip has audio - use as-is
-                        inputs_with_audio.append(f"{video_label}[{i}:a]")
+                        inputs_with_audio.append(f"[{i}:v][{i}:a]")
                     else:
                         # Clip has no audio - generate silent audio with duration
                         duration = durations[i]
@@ -592,7 +521,7 @@ class FFmpegService:
                         filter_parts.append(
                             f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={duration}[silent{i}]"
                         )
-                        inputs_with_audio.append(f"{video_label}[silent{i}]")
+                        inputs_with_audio.append(f"[{i}:v][silent{i}]")
 
                 # Combine filters and concat
                 if filter_parts:
@@ -673,4 +602,101 @@ class FFmpegService:
             raise Exception(f"FFmpeg merge timed out (max {timeout_mins:.0f} minutes)")
         except Exception as e:
             logger.error(f"Error merging videos: {str(e)}")
+            raise
+
+    @staticmethod
+    def scale_video(
+        input_path: str,
+        output_path: str,
+        target_width: int,
+        target_height: int
+    ) -> Dict[str, Any]:
+        """
+        Scale a video to target resolution with aspect ratio preservation and padding
+
+        Args:
+            input_path: Path to input video
+            output_path: Path to save scaled video
+            target_width: Target width in pixels
+            target_height: Target height in pixels
+
+        Returns:
+            Dictionary with success status and output info
+
+        Raises:
+            Exception: If scaling fails
+        """
+        try:
+            if not os.path.exists(input_path):
+                raise FileNotFoundError(f"Input file not found: {input_path}")
+
+            logger.info(f"Scaling video {input_path} to {target_width}x{target_height}")
+
+            # Get current video dimensions
+            media_info = FFmpegService.get_media_info(input_path)
+            current_width = FFmpegService._get_video_width(media_info)
+            current_height = FFmpegService._get_video_height(media_info)
+
+            if current_width == target_width and current_height == target_height:
+                # Already correct size - just copy
+                logger.info(f"Video already at target resolution, copying: {input_path}")
+                import shutil
+                shutil.copy2(input_path, output_path)
+                return {
+                    "success": True,
+                    "output_path": output_path,
+                    "scaled": False
+                }
+
+            # Build FFmpeg command with scale + pad filters
+            # This maintains aspect ratio and centers video with black bars
+            filter_str = (
+                f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+                f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2"
+            )
+
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                '-vf', filter_str,
+                '-c:v', 'libx264',  # Re-encode video
+                '-preset', 'medium',
+                '-crf', '23',  # Quality setting
+                '-c:a', 'copy',  # Copy audio without re-encoding
+                '-movflags', '+faststart',
+                output_path
+            ]
+
+            logger.info(f"Running FFmpeg scale command: {' '.join(cmd)}")
+
+            # Execute FFmpeg
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 minute timeout
+            )
+
+            if process.returncode != 0:
+                logger.error(f"FFmpeg scale error: {process.stderr}")
+                raise Exception(f"FFmpeg scale failed: {process.stderr}")
+
+            # Verify output file was created
+            if not os.path.exists(output_path):
+                raise Exception("Scaled output file was not created")
+
+            output_size = os.path.getsize(output_path)
+            logger.info(f"Successfully scaled video: {output_path} ({output_size} bytes)")
+
+            return {
+                "success": True,
+                "output_path": output_path,
+                "output_size": output_size,
+                "scaled": True
+            }
+
+        except subprocess.TimeoutExpired:
+            raise Exception("FFmpeg scaling timed out (max 2 minutes)")
+        except Exception as e:
+            logger.error(f"Error scaling video: {str(e)}")
             raise

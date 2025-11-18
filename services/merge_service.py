@@ -50,17 +50,82 @@ class MergeService:
             logger.error(f"Failed to download clips: {str(e)}")
             raise Exception(f"Clip download failed: {str(e)}")
 
+    def scale_clips_to_target(
+        self,
+        downloaded_clips: List[Tuple[str, str]]
+    ) -> Tuple[List[str], int, int]:
+        """
+        Scale all clips to match the first clip's resolution
+
+        Args:
+            downloaded_clips: List of tuples (file_path, content_type)
+
+        Returns:
+            Tuple of (scaled_clip_paths, target_width, target_height)
+
+        Raises:
+            Exception: If scaling fails
+        """
+        if not downloaded_clips:
+            raise ValueError("No clips to scale")
+
+        scaled_paths = []
+
+        try:
+            # Get target resolution from first clip
+            first_clip_path = downloaded_clips[0][0]
+            media_info = self.ffmpeg_service.get_media_info(first_clip_path)
+            target_width = self.ffmpeg_service._get_video_width(media_info)
+            target_height = self.ffmpeg_service._get_video_height(media_info)
+
+            if target_width is None or target_height is None:
+                raise ValueError("Could not determine resolution of first clip")
+
+            logger.info(f"Target resolution from first clip: {target_width}x{target_height}")
+
+            # Scale each clip to target resolution
+            for i, (clip_path, content_type) in enumerate(downloaded_clips):
+                logger.info(f"Scaling clip {i+1}/{len(downloaded_clips)} to {target_width}x{target_height}")
+
+                # Generate output path for scaled clip
+                output_filename = f"scaled_{uuid.uuid4()}.mp4"
+                output_path = os.path.join(Config.TEMP_DIR, output_filename)
+
+                # Scale video (or copy if already correct size)
+                result = self.ffmpeg_service.scale_video(
+                    input_path=clip_path,
+                    output_path=output_path,
+                    target_width=target_width,
+                    target_height=target_height
+                )
+
+                if not result.get('success'):
+                    raise Exception(f"Failed to scale clip {i+1}")
+
+                scaled_paths.append(output_path)
+                logger.info(f"Clip {i+1}: {'Scaled' if result.get('scaled') else 'Copied'} to {output_path}")
+
+            logger.info(f"Successfully scaled {len(scaled_paths)} clips to {target_width}x{target_height}")
+            return scaled_paths, target_width, target_height
+
+        except Exception as e:
+            # Cleanup any partially scaled files
+            for path in scaled_paths:
+                self.cleanup_file(path)
+            logger.error(f"Scaling failed: {str(e)}")
+            raise Exception(f"Clip scaling failed: {str(e)}")
+
     def apply_overlays_to_clips(
         self,
         clip_configs: List[Dict],
-        downloaded_clips: List[Tuple[str, str]]
+        scaled_clip_paths: List[str]
     ) -> List[str]:
         """
-        Apply text overlays to each downloaded clip
+        Apply text overlays to each scaled clip
 
         Args:
             clip_configs: List of clip configurations with text/template/overrides
-            downloaded_clips: List of tuples (file_path, content_type)
+            scaled_clip_paths: List of paths to scaled video files
 
         Returns:
             List of paths to overlayed clip files
@@ -71,7 +136,7 @@ class MergeService:
         overlayed_paths = []
 
         try:
-            for i, ((clip_path, content_type), config) in enumerate(zip(downloaded_clips, clip_configs)):
+            for i, (clip_path, config) in enumerate(zip(scaled_clip_paths, clip_configs)):
                 logger.info(f"Applying overlay to clip {i+1}/{len(clip_configs)}: {config.get('text')}")
 
                 # Generate output path for overlayed clip
@@ -197,7 +262,10 @@ class MergeService:
         output_path: str
     ) -> Dict:
         """
-        Main entry point: Download, overlay, and merge clips
+        Main entry point: Download, scale, overlay, and merge clips
+
+        New workflow: Download → Scale → Overlay → Merge
+        This ensures text overlays wrap correctly to target canvas dimensions
 
         Args:
             clip_configs: List of clip configurations
@@ -210,6 +278,7 @@ class MergeService:
             Exception: If any step fails
         """
         downloaded_paths = []
+        scaled_paths = []
         overlayed_paths = []
 
         try:
@@ -221,23 +290,32 @@ class MergeService:
             downloaded_clips = await self.download_clips(clip_urls)
             downloaded_paths = [path for path, _ in downloaded_clips]
 
-            # Step 3: Apply overlays to each clip
-            overlayed_paths = self.apply_overlays_to_clips(clip_configs, downloaded_clips)
+            # Step 3: Scale all clips to match first clip's resolution
+            scaled_paths, target_width, target_height = self.scale_clips_to_target(downloaded_clips)
+            logger.info(f"All clips scaled to target resolution: {target_width}x{target_height}")
 
             # Step 4: Cleanup downloaded originals (no longer needed)
             self.cleanup_files(downloaded_paths)
             downloaded_paths = []
 
-            # Step 5: Merge all overlayed clips
+            # Step 5: Apply overlays to scaled clips (text wraps to correct width)
+            overlayed_paths = self.apply_overlays_to_clips(clip_configs, scaled_paths)
+
+            # Step 6: Cleanup scaled clips (no longer needed)
+            self.cleanup_files(scaled_paths)
+            scaled_paths = []
+
+            # Step 7: Merge all overlayed clips (no scaling needed - already same resolution)
             merge_result = self.merge_clips(overlayed_paths, output_path)
 
-            # Step 6: Cleanup overlayed clips (no longer needed)
+            # Step 8: Cleanup overlayed clips (no longer needed)
             self.cleanup_files(overlayed_paths)
             overlayed_paths = []
 
             return {
                 'success': True,
                 'clips_processed': len(clip_configs),
+                'target_resolution': f"{target_width}x{target_height}",
                 'output_path': output_path,
                 **merge_result
             }
@@ -245,6 +323,7 @@ class MergeService:
         except Exception as e:
             # Cleanup on failure
             self.cleanup_files(downloaded_paths)
+            self.cleanup_files(scaled_paths)
             self.cleanup_files(overlayed_paths)
 
             logger.error(f"Merge request processing failed: {str(e)}")
