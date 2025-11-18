@@ -110,6 +110,7 @@ class FFmpegService:
             logger.info(f"Successfully created output file: {output_path} ({output_size} bytes)")
 
             return {
+                "success": True,
                 "status": "success",
                 "output_path": output_path,
                 "output_size": output_size
