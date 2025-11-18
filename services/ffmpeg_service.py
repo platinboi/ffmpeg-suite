@@ -457,9 +457,10 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Detect which inputs have audio streams AND get video resolutions
+            # Detect which inputs have audio streams AND get video resolutions AND durations
             has_audio = []
             resolutions = []  # List of (width, height) tuples
+            durations = []  # List of video durations in seconds
             for input_path in input_paths:
                 media_info = FFmpegService.get_media_info(input_path)
 
@@ -477,8 +478,18 @@ class FFmpegService:
                 height = FFmpegService._get_video_height(media_info)
                 resolutions.append((width, height))
 
+                # Get video duration
+                duration = None
+                if 'format' in media_info and 'duration' in media_info['format']:
+                    try:
+                        duration = float(media_info['format']['duration'])
+                    except (ValueError, TypeError):
+                        logger.warning(f"Could not parse duration from media info for {input_path}")
+                durations.append(duration)
+
             logger.info(f"Audio stream detection: {has_audio}")
             logger.info(f"Video resolutions: {resolutions}")
+            logger.info(f"Video durations: {durations}")
 
             # Determine target resolution (use first clip's resolution)
             target_width, target_height = resolutions[0]
@@ -573,9 +584,13 @@ class FFmpegService:
                         # Clip has audio - use as-is
                         inputs_with_audio.append(f"{video_label}[{i}:a]")
                     else:
-                        # Clip has no audio - generate silent audio
+                        # Clip has no audio - generate silent audio with duration
+                        duration = durations[i]
+                        if duration is None:
+                            raise ValueError(f"Could not determine duration for clip {i} to generate silent audio")
+
                         filter_parts.append(
-                            f"anullsrc=channel_layout=stereo:sample_rate=44100[silent{i}]"
+                            f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={duration}[silent{i}]"
                         )
                         inputs_with_audio.append(f"{video_label}[silent{i}]")
 
