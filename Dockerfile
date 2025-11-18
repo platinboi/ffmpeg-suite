@@ -27,12 +27,8 @@ RUN wget https://github.com/rsms/inter/releases/download/v3.19/Inter-3.19.zip -O
     cp /tmp/inter/*.ttf /usr/share/fonts/truetype/custom/ 2>/dev/null || true && \
     rm -rf /tmp/inter /tmp/inter.zip
 
-# Download and install TikTok Sans fonts
-RUN wget https://github.com/google/fonts/raw/main/ofl/tiktoksans/TikTokSans-Medium.ttf -O /usr/share/fonts/truetype/custom/TikTokSans-Medium.ttf && \
-    wget https://github.com/google/fonts/raw/main/ofl/tiktoksans/TikTokSans-SemiBold.ttf -O /usr/share/fonts/truetype/custom/TikTokSans-SemiBold.ttf
-
-# Alternative: Copy fonts from local directory (if you have them)
-# COPY fonts/*.ttf /usr/share/fonts/truetype/custom/
+# Copy fonts from local directory (we have TikTok Sans and Inter locally)
+COPY fonts/*.ttf /usr/share/fonts/truetype/custom/
 
 # Set proper permissions and update font cache
 RUN chmod 644 /usr/share/fonts/truetype/custom/* && \
