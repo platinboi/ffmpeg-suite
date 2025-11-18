@@ -357,6 +357,19 @@ class FFmpegService:
             return None
 
     @staticmethod
+    def _get_video_height(media_info: Dict[str, Any]) -> Optional[int]:
+        """Extract video/image height from media info"""
+        try:
+            if 'streams' in media_info:
+                for stream in media_info['streams']:
+                    if stream.get('codec_type') == 'video' and 'height' in stream:
+                        return int(stream['height'])
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to extract video height: {str(e)}")
+            return None
+
+    @staticmethod
     def _wrap_text(
         text: str,
         font_size: int,
@@ -444,10 +457,13 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Detect which inputs have audio streams
+            # Detect which inputs have audio streams AND get video resolutions
             has_audio = []
+            resolutions = []  # List of (width, height) tuples
             for input_path in input_paths:
                 media_info = FFmpegService.get_media_info(input_path)
+
+                # Check for audio
                 audio_stream_exists = False
                 if 'streams' in media_info:
                     for stream in media_info['streams']:
@@ -456,45 +472,112 @@ class FFmpegService:
                             break
                 has_audio.append(audio_stream_exists)
 
+                # Get video resolution
+                width = FFmpegService._get_video_width(media_info)
+                height = FFmpegService._get_video_height(media_info)
+                resolutions.append((width, height))
+
             logger.info(f"Audio stream detection: {has_audio}")
+            logger.info(f"Video resolutions: {resolutions}")
+
+            # Determine target resolution (use first clip's resolution)
+            target_width, target_height = resolutions[0]
+            if target_width is None or target_height is None:
+                raise ValueError("Could not determine resolution of first video clip")
+
+            # Check if all resolutions match
+            resolutions_match = all(
+                w == target_width and h == target_height
+                for w, h in resolutions
+            )
+            logger.info(f"Target resolution: {target_width}x{target_height}, All match: {resolutions_match}")
 
             # Determine audio handling strategy
             all_have_audio = all(has_audio)
             none_have_audio = not any(has_audio)
 
             if none_have_audio:
-                # No audio in any clip - simple video-only concat
-                inputs = []
+                # No audio in any clip - video-only concat with scaling
+                filter_parts = []
+                scaled_inputs = []
+
                 for i in range(len(input_paths)):
-                    inputs.append(f"[{i}:v]")
-                concat_filter = "".join(inputs) + f"concat=n={len(input_paths)}:v=1:a=0[v]"
+                    if not resolutions_match:
+                        # Scale video to target resolution
+                        filter_parts.append(
+                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+                        )
+                        scaled_inputs.append(f"[v{i}]")
+                    else:
+                        # No scaling needed
+                        scaled_inputs.append(f"[{i}:v]")
+
+                # Build filter
+                if filter_parts:
+                    filter_str = ";".join(filter_parts) + ";"
+                else:
+                    filter_str = ""
+
+                concat_input = "".join(scaled_inputs)
+                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=0[v]"
                 map_args = ['-map', '[v]']
                 logger.info("Using video-only concat (no audio streams)")
 
             elif all_have_audio:
-                # All clips have audio - standard concat
-                inputs = []
+                # All clips have audio - concat with scaling
+                filter_parts = []
+                scaled_inputs = []
+
                 for i in range(len(input_paths)):
-                    inputs.append(f"[{i}:v][{i}:a]")
-                concat_filter = "".join(inputs) + f"concat=n={len(input_paths)}:v=1:a=1[v][a]"
+                    if not resolutions_match:
+                        # Scale video to target resolution
+                        filter_parts.append(
+                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+                        )
+                        scaled_inputs.append(f"[v{i}][{i}:a]")
+                    else:
+                        # No scaling needed
+                        scaled_inputs.append(f"[{i}:v][{i}:a]")
+
+                # Build filter
+                if filter_parts:
+                    filter_str = ";".join(filter_parts) + ";"
+                else:
+                    filter_str = ""
+
+                concat_input = "".join(scaled_inputs)
+                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=1[v][a]"
                 map_args = ['-map', '[v]', '-map', '[a]']
                 logger.info("Using standard concat (all clips have audio)")
 
             else:
-                # Mixed audio - add silent audio to clips without audio
+                # Mixed audio - add silent audio to clips without audio AND scale videos
                 filter_parts = []
                 inputs_with_audio = []
 
                 for i, input_path in enumerate(input_paths):
+                    # Handle video scaling
+                    if not resolutions_match:
+                        filter_parts.append(
+                            f"[{i}:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+                            f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+                        )
+                        video_label = f"[v{i}]"
+                    else:
+                        video_label = f"[{i}:v]"
+
+                    # Handle audio
                     if has_audio[i]:
                         # Clip has audio - use as-is
-                        inputs_with_audio.append(f"[{i}:v][{i}:a]")
+                        inputs_with_audio.append(f"{video_label}[{i}:a]")
                     else:
                         # Clip has no audio - generate silent audio
                         filter_parts.append(
                             f"anullsrc=channel_layout=stereo:sample_rate=44100[silent{i}]"
                         )
-                        inputs_with_audio.append(f"[{i}:v][silent{i}]")
+                        inputs_with_audio.append(f"{video_label}[silent{i}]")
 
                 # Combine filters and concat
                 if filter_parts:
