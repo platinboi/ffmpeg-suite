@@ -136,6 +136,10 @@ async def startup_event():
         logger.info("Seeding default template...")
         template_service.seed_default_template()
 
+        # Update default template font path (ensures production paths are correct)
+        logger.info("Updating default template font path...")
+        template_service.update_default_template_font_path()
+
         # Bootstrap default user
         logger.info("Bootstrapping default user...")
         user, api_key = auth_service.bootstrap_default_user()

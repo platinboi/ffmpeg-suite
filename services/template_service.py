@@ -258,3 +258,18 @@ class TemplateService:
             """, default_template)
 
         logger.info("✓ Seeded default template")
+
+    def update_default_template_font_path(self):
+        """
+        Force update the default template's font path to use absolute path.
+        This ensures existing templates use the correct path in production.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE templates
+                SET font_path = %s
+                WHERE name = 'default'
+            """, (Config.TIKTOK_SANS_SEMIBOLD,))
+            conn.commit()
+            logger.info(f"✓ Updated default template font path to: {Config.TIKTOK_SANS_SEMIBOLD}")
