@@ -31,10 +31,21 @@ class DownloadService:
             Exception: If download fails
         """
         try:
-            timeout = aiohttp.ClientTimeout(total=Config.UPLOAD_TIMEOUT)
+            # Increase timeout for large video files
+            timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes for video downloads
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as response:
+            # Add browser-like headers to bypass Cloudflare bot protection
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'video/mp4,video/*,*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Referer': url,
+            }
+
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.get(url, allow_redirects=True) as response:
                     if response.status != 200:
                         raise Exception(f"Failed to download file: HTTP {response.status}")
 
