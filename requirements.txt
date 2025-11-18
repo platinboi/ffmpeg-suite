@@ -23,3 +23,6 @@ requests==2.31.0
 # PostgreSQL database
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
+
+# Image processing for accurate font measurements
+Pillow==10.4.0

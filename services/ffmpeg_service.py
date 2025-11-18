@@ -73,6 +73,7 @@ class FFmpegService:
                 text = FFmpegService._wrap_text(
                     text,
                     style.font_size,
+                    style.font_path,
                     img_width,
                     overrides.max_text_width_percent
                 )
@@ -373,34 +374,38 @@ class FFmpegService:
     def _wrap_text(
         text: str,
         font_size: int,
+        font_path: str,
         img_width: int,
         max_width_percent: int
     ) -> str:
         """
-        Wrap text based on max width percentage of image.
-        Uses character-based approximation since we don't have exact font metrics.
+        Wrap text based on max width percentage using accurate font measurements.
+        Uses Pillow (PIL) to measure actual pixel widths with the specific font file.
 
         Args:
             text: Input text
             font_size: Font size in pixels
+            font_path: Absolute path to font file
             img_width: Image width in pixels
             max_width_percent: Max text width as percentage (10-100)
 
         Returns:
             Text with newlines inserted for wrapping
         """
+        from PIL import ImageFont
+
         max_width_px = (img_width * max_width_percent) / 100
 
-        # Approximate character width (roughly 0.6 * font_size for most fonts)
-        avg_char_width = font_size * 0.6
-        max_chars_per_line = int(max_width_px / avg_char_width)
-
-        # Ensure at least some characters per line
-        if max_chars_per_line < 5:
-            max_chars_per_line = 5
+        try:
+            # Load the actual font file for accurate measurements
+            font = ImageFont.truetype(font_path, font_size)
+        except Exception as e:
+            logger.warning(f"Failed to load font {font_path}: {e}. Falling back to default font.")
+            # Fallback to default font if loading fails
+            font = ImageFont.load_default()
 
         wrapped_lines = []
-        # Split by existing line breaks first
+        # Split by existing line breaks first (preserve manual newlines)
         paragraphs = text.split('\n')
 
         for paragraph in paragraphs:
@@ -413,13 +418,20 @@ class FFmpegService:
             current_line = ''
 
             for word in words:
+                # Test adding this word to the current line
                 test_line = current_line + (' ' if current_line else '') + word
 
-                # Check if adding this word exceeds max chars
-                if len(test_line) > max_chars_per_line and current_line:
+                # Measure actual pixel width using font metrics
+                bbox = font.getbbox(test_line)
+                text_width = bbox[2] - bbox[0]  # right - left
+
+                # Check if adding this word exceeds max width
+                if text_width > max_width_px and current_line:
+                    # Current line is full, start new line
                     wrapped_lines.append(current_line)
                     current_line = word
                 else:
+                    # Word fits, add to current line
                     current_line = test_line
 
             # Add remaining text
