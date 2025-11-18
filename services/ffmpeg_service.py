@@ -444,13 +444,67 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Build concat filter
-            # For N videos: [0:v][0:a][1:v][1:a]...[N:v][N:a]concat=n=N:v=1:a=1[v][a]
-            inputs = []
-            for i in range(len(input_paths)):
-                inputs.append(f"[{i}:v][{i}:a]")
+            # Detect which inputs have audio streams
+            has_audio = []
+            for input_path in input_paths:
+                media_info = FFmpegService.get_media_info(input_path)
+                audio_stream_exists = False
+                if 'streams' in media_info:
+                    for stream in media_info['streams']:
+                        if stream.get('codec_type') == 'audio':
+                            audio_stream_exists = True
+                            break
+                has_audio.append(audio_stream_exists)
 
-            concat_filter = "".join(inputs) + f"concat=n={len(input_paths)}:v=1:a=1[v][a]"
+            logger.info(f"Audio stream detection: {has_audio}")
+
+            # Determine audio handling strategy
+            all_have_audio = all(has_audio)
+            none_have_audio = not any(has_audio)
+
+            if none_have_audio:
+                # No audio in any clip - simple video-only concat
+                inputs = []
+                for i in range(len(input_paths)):
+                    inputs.append(f"[{i}:v]")
+                concat_filter = "".join(inputs) + f"concat=n={len(input_paths)}:v=1:a=0[v]"
+                map_args = ['-map', '[v]']
+                logger.info("Using video-only concat (no audio streams)")
+
+            elif all_have_audio:
+                # All clips have audio - standard concat
+                inputs = []
+                for i in range(len(input_paths)):
+                    inputs.append(f"[{i}:v][{i}:a]")
+                concat_filter = "".join(inputs) + f"concat=n={len(input_paths)}:v=1:a=1[v][a]"
+                map_args = ['-map', '[v]', '-map', '[a]']
+                logger.info("Using standard concat (all clips have audio)")
+
+            else:
+                # Mixed audio - add silent audio to clips without audio
+                filter_parts = []
+                inputs_with_audio = []
+
+                for i, input_path in enumerate(input_paths):
+                    if has_audio[i]:
+                        # Clip has audio - use as-is
+                        inputs_with_audio.append(f"[{i}:v][{i}:a]")
+                    else:
+                        # Clip has no audio - generate silent audio
+                        filter_parts.append(
+                            f"anullsrc=channel_layout=stereo:sample_rate=44100[silent{i}]"
+                        )
+                        inputs_with_audio.append(f"[{i}:v][silent{i}]")
+
+                # Combine filters and concat
+                if filter_parts:
+                    filter_str = ";".join(filter_parts) + ";"
+                else:
+                    filter_str = ""
+                concat_input = "".join(inputs_with_audio)
+                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=1[v][a]"
+                map_args = ['-map', '[v]', '-map', '[a]']
+                logger.info("Using mixed concat (adding silent audio to clips without audio)")
 
             # Build FFmpeg command
             cmd = ['ffmpeg', '-y']
@@ -462,13 +516,20 @@ class FFmpegService:
             # Add filter_complex and output settings
             cmd.extend([
                 '-filter_complex', concat_filter,
-                '-map', '[v]',  # Map concatenated video
-                '-map', '[a]',  # Map concatenated audio
+                *map_args,  # Unpack map arguments (varies based on audio strategy)
                 '-c:v', 'libx264',  # H.264 video codec
                 '-preset', 'medium',  # Encoding speed/quality tradeoff
                 '-crf', '23',  # Constant Rate Factor (quality)
-                '-c:a', 'aac',  # AAC audio codec
-                '-b:a', '128k',  # Audio bitrate
+            ])
+
+            # Only add audio codec settings if we have audio
+            if not none_have_audio:
+                cmd.extend([
+                    '-c:a', 'aac',  # AAC audio codec
+                    '-b:a', '128k',  # Audio bitrate
+                ])
+
+            cmd.extend([
                 '-movflags', '+faststart',  # Enable streaming
                 output_path
             ])
