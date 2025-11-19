@@ -321,10 +321,10 @@ class FFmpegService:
             cmd.extend([
                 '-vf', filter_str,
                 '-c:v', 'libx264',  # H.264 video codec
-                '-preset', 'medium',  # Encoding speed/quality tradeoff
-                '-crf', '23',  # Constant Rate Factor (quality)
+                '-preset', 'slow',  # Encoding speed/quality tradeoff (slow = better quality)
+                '-crf', '18',  # Constant Rate Factor (18 = high quality, lower = better)
                 '-c:a', 'aac',  # AAC audio codec
-                '-b:a', '128k',  # Audio bitrate
+                '-b:a', '192k',  # Audio bitrate (higher quality audio)
                 '-movflags', '+faststart',  # Enable streaming
                 output_path
             ])
@@ -566,15 +566,15 @@ class FFmpegService:
                 '-filter_complex', concat_filter,
                 *map_args,  # Unpack map arguments (varies based on audio strategy)
                 '-c:v', 'libx264',  # H.264 video codec
-                '-preset', 'medium',  # Encoding speed/quality tradeoff
-                '-crf', '23',  # Constant Rate Factor (quality)
+                '-preset', 'slow',  # Encoding speed/quality tradeoff (slow = better quality)
+                '-crf', '18',  # Constant Rate Factor (18 = high quality, lower = better)
             ])
 
             # Only add audio codec settings if we have audio
             if not none_have_audio:
                 cmd.extend([
                     '-c:a', 'aac',  # AAC audio codec
-                    '-b:a', '128k',  # Audio bitrate
+                    '-b:a', '192k',  # Audio bitrate (higher quality audio)
                 ])
 
             cmd.extend([
