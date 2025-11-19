@@ -111,6 +111,22 @@ class DatabaseService:
                 ON templates(is_default)
             """)
 
+            # Migration: Add max_text_width_percent column if it doesn't exist
+            # This handles existing tables that were created before this column was added
+            cursor.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'templates'
+                        AND column_name = 'max_text_width_percent'
+                    ) THEN
+                        ALTER TABLE templates
+                        ADD COLUMN max_text_width_percent INTEGER DEFAULT 80;
+                    END IF;
+                END $$;
+            """)
+
             # Create updated_at trigger
             cursor.execute("""
                 CREATE OR REPLACE FUNCTION update_updated_at_column()

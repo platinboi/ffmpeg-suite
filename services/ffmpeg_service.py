@@ -67,10 +67,14 @@ class FFmpegService:
             # Get media dimensions for text wrapping
             media_info = FFmpegService.get_media_info(input_path)
             img_width = FFmpegService._get_video_width(media_info)
+            logger.info(f"[TEXT WRAP DEBUG] img_width from media: {img_width}")
 
             # Wrap text if max_text_width_percent is specified (override or template default)
             max_text_width = overrides.max_text_width_percent if (overrides and overrides.max_text_width_percent) else style.max_text_width_percent
+            logger.info(f"[TEXT WRAP DEBUG] max_text_width_percent: override={overrides.max_text_width_percent if overrides else None}, style={style.max_text_width_percent}, final={max_text_width}")
+
             if max_text_width and img_width:
+                logger.info(f"[TEXT WRAP DEBUG] Condition passed! Wrapping text to {max_text_width}% of {img_width}px")
                 text = FFmpegService._wrap_text(
                     text,
                     style.font_size,
@@ -78,6 +82,9 @@ class FFmpegService:
                     img_width,
                     max_text_width
                 )
+                logger.info(f"[TEXT WRAP DEBUG] Wrapped text result:\n{text}")
+            else:
+                logger.warning(f"[TEXT WRAP DEBUG] Condition FAILED! max_text_width={max_text_width}, img_width={img_width} - text wrapping SKIPPED")
 
             # Build FFmpeg filter
             filter_str = FFmpegService._build_drawtext_filter(text, style, overrides)
