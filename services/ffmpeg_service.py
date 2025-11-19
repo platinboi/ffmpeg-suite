@@ -207,10 +207,14 @@ class FFmpegService:
             filter_params.append(f"boxcolor={bg_color}@{style.background_opacity}")
             filter_params.append("boxborderw=5")
 
-        # Add alignment if specified
+        # Add alignment - FFmpeg uses single-letter flags: L (left), C (center), R (right)
+        # Always add for center position to ensure multiline text centers properly
         if overrides and overrides.alignment:
-            alignment_map = {"left": "left", "center": "center", "right": "right"}
+            alignment_map = {"left": "L", "center": "C", "right": "R"}
             filter_params.append(f"text_align={alignment_map[overrides.alignment]}")
+        elif style.position == "center":
+            # Default to centered alignment for center position
+            filter_params.append("text_align=C")
 
         return "drawtext=" + ":".join(filter_params)
 
