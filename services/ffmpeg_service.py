@@ -387,30 +387,31 @@ class FFmpegService:
         max_width_percent: int
     ) -> str:
         """
-        Wrap text based on max width percentage using accurate font measurements.
-        Uses Pillow (PIL) to measure actual pixel widths with the specific font file.
+        Wrap text based on max width percentage using character-based estimation.
+        Simple and reliable approach that doesn't depend on Pillow font loading.
 
         Args:
             text: Input text
             font_size: Font size in pixels
-            font_path: Absolute path to font file
+            font_path: Absolute path to font file (not used, kept for compatibility)
             img_width: Image width in pixels
             max_width_percent: Max text width as percentage (10-100)
 
         Returns:
             Text with newlines inserted for wrapping
         """
-        from PIL import ImageFont
-
         max_width_px = (img_width * max_width_percent) / 100
 
-        try:
-            # Load the actual font file for accurate measurements
-            font = ImageFont.truetype(font_path, font_size)
-        except Exception as e:
-            logger.warning(f"Failed to load font {font_path}: {e}. Falling back to default font.")
-            # Fallback to default font if loading fails
-            font = ImageFont.load_default()
+        # Estimate average character width for the font
+        # For TikTok Sans and similar fonts at typical sizes, ~0.55 * font_size works well
+        avg_char_width = font_size * 0.55
+        max_chars_per_line = int(max_width_px / avg_char_width)
+
+        # Ensure minimum line length
+        if max_chars_per_line < 10:
+            max_chars_per_line = 10
+
+        logger.info(f"[TEXT WRAP] max_width_px={max_width_px}, avg_char_width={avg_char_width}, max_chars={max_chars_per_line}")
 
         wrapped_lines = []
         # Split by existing line breaks first (preserve manual newlines)
@@ -429,12 +430,8 @@ class FFmpegService:
                 # Test adding this word to the current line
                 test_line = current_line + (' ' if current_line else '') + word
 
-                # Measure actual pixel width using font metrics
-                bbox = font.getbbox(test_line)
-                text_width = bbox[2] - bbox[0]  # right - left
-
-                # Check if adding this word exceeds max width
-                if text_width > max_width_px and current_line:
+                # Check if adding this word exceeds max character count
+                if len(test_line) > max_chars_per_line and current_line:
                     # Current line is full, start new line
                     wrapped_lines.append(current_line)
                     current_line = word
