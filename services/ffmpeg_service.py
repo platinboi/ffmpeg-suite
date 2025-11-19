@@ -219,7 +219,7 @@ class FFmpegService:
         filter_params = [
             f"fontfile={style.font_path}",
             f"text={escaped_text}",
-            "expansion=none",  # Disable text expansion to prevent \n → n conversion
+            "expansion=normal",  # Enable text expansion to interpret \n as newlines
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
@@ -304,9 +304,12 @@ class FFmpegService:
         text = text.replace("'", "\\'")
         # Escape colons
         text = text.replace(":", "\\:")
-        # Keep actual newline characters - they work with expansion=none
-        # Do NOT convert to \n as that shows as literal 'n' with text expansion enabled
-        text = text.replace("\r", "")  # Remove carriage returns only
+        # Convert actual newlines to FFmpeg's \n escape sequence
+        # FFmpeg's drawtext parser cannot handle literal newline bytes in filter strings
+        # With expansion=normal, FFmpeg will interpret \n as line breaks
+        text = text.replace("\r\n", "\\n")  # Windows line endings
+        text = text.replace("\n", "\\n")     # Unix line endings
+        text = text.replace("\r", "\\n")     # Old Mac line endings
         return text
 
     @staticmethod
