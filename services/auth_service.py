@@ -240,6 +240,9 @@ class AuthService:
             user_id="default"
         )
 
+        # Reload data to include the newly created user
+        data = self._load_data()
+
         # Use persistent key if provided, otherwise generate new one
         if persistent_key:
             # Validate key format (should start with sk_live_)
@@ -261,7 +264,7 @@ class AuthService:
                     created_at=datetime.now(timezone.utc).isoformat()
                 )
 
-                # Save to data file
+                # Save to data file (data now includes the user)
                 data["api_keys"].append(api_key_obj.dict())
                 self._save_data(data)
 
