@@ -218,7 +218,7 @@ class FFmpegService:
         # Build filter parameters
         filter_params = [
             f"fontfile={style.font_path}",
-            f"text={escaped_text}",
+            f'text="{escaped_text}"',
             "expansion=none",  # Disable text expansion to prevent \n → n conversion
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
@@ -300,8 +300,8 @@ class FFmpegService:
         # FFmpeg drawtext requires escaping certain characters
         # Escape backslashes first (must be first!)
         text = text.replace("\\", "\\\\")
-        # Escape single quotes
-        text = text.replace("'", "\\'")
+        # Escape double quotes (text parameter is now wrapped in double quotes)
+        text = text.replace('"', '\\"')
         # Escape colons
         text = text.replace(":", "\\:")
         # Escape dollar signs (used for variable/expression expansion)
