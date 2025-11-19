@@ -184,6 +184,7 @@ class FFmpegService:
         filter_params = [
             f"fontfile={style.font_path}",
             f"text={escaped_text}",
+            "expansion=none",  # Disable text expansion to prevent \n → n conversion
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
@@ -257,10 +258,9 @@ class FFmpegService:
         text = text.replace("'", "\\'")
         # Escape colons
         text = text.replace(":", "\\:")
-        # Escape newlines for FFmpeg drawtext filter
-        # Replace actual newline characters with \n sequence that FFmpeg expects
-        text = text.replace("\n", "\\n")
-        text = text.replace("\r", "")  # Remove carriage returns
+        # Keep actual newline characters - they work with expansion=none
+        # Do NOT convert to \n as that shows as literal 'n' with text expansion enabled
+        text = text.replace("\r", "")  # Remove carriage returns only
         return text
 
     @staticmethod
