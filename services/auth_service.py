@@ -7,6 +7,7 @@ import json
 import hashlib
 import secrets
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Dict, List
 from datetime import datetime, timezone
@@ -215,6 +216,9 @@ class AuthService:
         Create a default user and API key for initial setup
         Only creates if no users exist
 
+        Checks for PERSISTENT_API_KEY environment variable to use a persistent key
+        across redeployments instead of generating a new one each time.
+
         Returns:
             tuple: (user, api_key) or (None, None) if users already exist
         """
@@ -225,6 +229,9 @@ class AuthService:
             logger.info("Users already exist, skipping bootstrap")
             return None, None
 
+        # Check for persistent API key from environment variable
+        persistent_key = os.getenv("PERSISTENT_API_KEY")
+
         # Create default user
         user = self.create_user(
             email="admin@localhost",
@@ -233,11 +240,36 @@ class AuthService:
             user_id="default"
         )
 
-        # Generate API key
-        api_key, _ = self.generate_api_key(
-            user_id=user.id,
-            name="Default API Key"
-        )
+        # Use persistent key if provided, otherwise generate new one
+        if persistent_key:
+            # Validate key format (should start with sk_live_)
+            if not persistent_key.startswith("sk_live_"):
+                logger.warning("PERSISTENT_API_KEY doesn't start with 'sk_live_', generating new key instead")
+                api_key, _ = self.generate_api_key(user_id=user.id, name="Default API Key")
+            else:
+                # Use the persistent key from environment
+                key_hash = hashlib.sha256(persistent_key.encode()).hexdigest()
+                key_prefix = persistent_key[:16]
+
+                api_key_obj = APIKey(
+                    id=f"key_{secrets.token_hex(8)}",
+                    user_id=user.id,
+                    key_hash=key_hash,
+                    key_prefix=key_prefix,
+                    name="Persistent API Key",
+                    is_active=True,
+                    created_at=datetime.now(timezone.utc).isoformat()
+                )
+
+                # Save to data file
+                data["api_keys"].append(api_key_obj.dict())
+                self._save_data(data)
+
+                api_key = persistent_key
+                logger.info("✓ Using PERSISTENT_API_KEY from environment variable")
+        else:
+            # Generate new random API key
+            api_key, _ = self.generate_api_key(user_id=user.id, name="Default API Key")
 
         logger.info(f"✓ Bootstrap complete!")
         logger.info(f"✓ User ID: {user.id}")
