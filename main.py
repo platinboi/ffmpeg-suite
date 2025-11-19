@@ -140,6 +140,10 @@ async def startup_event():
         logger.info("Updating default template font path...")
         template_service.update_default_template_font_path()
 
+        # Update default template font size
+        logger.info("Updating default template font size...")
+        template_service.update_default_template_font_size(46)
+
         # Bootstrap default user
         logger.info("Bootstrapping default user...")
         user, api_key = auth_service.bootstrap_default_user()

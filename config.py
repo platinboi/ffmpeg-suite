@@ -129,7 +129,7 @@ def get_template(template_name: str) -> TextStyle:
     # Ultimate fallback - hardcoded default
     return TextStyle(
         font_path=Config.TIKTOK_SANS_SEMIBOLD,
-        font_size=48,
+        font_size=46,
         text_color="white",
         border_width=3,
         border_color="black",

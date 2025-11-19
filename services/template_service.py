@@ -222,7 +222,7 @@ class TemplateService:
         default_template = {
             'name': 'default',
             'font_path': Config.TIKTOK_SANS_SEMIBOLD,
-            'font_size': 48,
+            'font_size': 46,
             'font_weight': 500,
             'text_color': 'white',
             'border_width': 3,
@@ -273,3 +273,18 @@ class TemplateService:
             """, (Config.TIKTOK_SANS_SEMIBOLD,))
             conn.commit()
             logger.info(f"✓ Updated default template font path to: {Config.TIKTOK_SANS_SEMIBOLD}")
+
+    def update_default_template_font_size(self, font_size: int = 46):
+        """
+        Force update the default template's font size.
+        This ensures existing templates use the new font size.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE templates
+                SET font_size = %s
+                WHERE name = 'default'
+            """, (font_size,))
+            conn.commit()
+            logger.info(f"✓ Updated default template font size to: {font_size}")
