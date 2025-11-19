@@ -222,7 +222,7 @@ class TemplateService:
         default_template = {
             'name': 'default',
             'font_path': Config.TIKTOK_SANS_SEMIBOLD,
-            'font_size': 54,
+            'font_size': 48,
             'font_weight': 500,
             'text_color': 'white',
             'border_width': 3,
