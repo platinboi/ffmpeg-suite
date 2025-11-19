@@ -257,8 +257,9 @@ class FFmpegService:
         text = text.replace("'", "\\'")
         # Escape colons
         text = text.replace(":", "\\:")
-        # Keep newlines as-is - FFmpeg drawtext handles actual newline characters
-        # text = text.replace("\n", "\\n")  # REMOVED - was causing literal 'n' to appear
+        # Escape newlines for FFmpeg drawtext filter
+        # Replace actual newline characters with \n sequence that FFmpeg expects
+        text = text.replace("\n", "\\n")
         text = text.replace("\r", "")  # Remove carriage returns
         return text
 
