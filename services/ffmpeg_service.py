@@ -183,7 +183,7 @@ class FFmpegService:
         # Build filter parameters
         filter_params = [
             f"fontfile={style.font_path}",
-            f"text='{escaped_text}'",
+            f"text={escaped_text}",
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
