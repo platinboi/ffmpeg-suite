@@ -151,13 +151,19 @@ class MergeService:
                     except Exception as e:
                         logger.warning(f"Failed to parse overrides for clip {i+1}: {e}")
 
+                # Detect if this is the last clip - hide text in final seconds only for last clip
+                is_last_clip = (i == len(clip_configs) - 1)
+                if is_last_clip:
+                    logger.info(f"Last clip detected - text will disappear in final 2.5 seconds (clip {i+1})")
+
                 # Apply text overlay using FFmpeg service
                 result = self.ffmpeg_service.add_text_overlay(
                     input_path=clip_path,
                     output_path=output_path,
                     text=config['text'],
                     template_name=config.get('template', 'default'),
-                    overrides=overrides
+                    overrides=overrides,
+                    apply_fade_out=is_last_clip
                 )
 
                 if not result.get('success'):

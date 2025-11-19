@@ -41,7 +41,9 @@ class FFmpegService:
         output_path: str,
         text: str,
         template_name: str = "default",
-        overrides: Optional[TextOverrideOptions] = None
+        overrides: Optional[TextOverrideOptions] = None,
+        apply_fade_out: bool = False,
+        fade_out_duration: float = 2.5
     ) -> Dict[str, Any]:
         """
         Add text overlay to video or image
@@ -52,6 +54,8 @@ class FFmpegService:
             text: Text to overlay
             template_name: Name of style template to use
             overrides: Optional style overrides
+            apply_fade_out: Whether to hide text in the final seconds
+            fade_out_duration: Seconds before end to hide text (default 2.5)
 
         Returns:
             Dict with status and details
@@ -86,8 +90,28 @@ class FFmpegService:
             else:
                 logger.warning(f"[TEXT WRAP DEBUG] Condition FAILED! max_text_width={max_text_width}, img_width={img_width} - text wrapping SKIPPED")
 
+            # Extract video duration if text hiding is requested
+            video_duration = None
+            if apply_fade_out:
+                if 'format' in media_info and 'duration' in media_info['format']:
+                    try:
+                        video_duration = float(media_info['format']['duration'])
+                        logger.info(f"Extracted video duration for text hiding: {video_duration}s")
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Failed to parse video duration for text hiding: {e}")
+                        apply_fade_out = False
+                else:
+                    logger.warning("Video duration not available, skipping text hiding")
+                    apply_fade_out = False
+
             # Build FFmpeg filter
-            filter_str = FFmpegService._build_drawtext_filter(text, style, overrides)
+            filter_str = FFmpegService._build_drawtext_filter(
+                text,
+                style,
+                overrides,
+                fade_out_duration=fade_out_duration if apply_fade_out else None,
+                video_duration=video_duration if apply_fade_out else None
+            )
 
             # Determine if input is image or video
             is_image = FFmpegService._is_image(input_path)
@@ -165,9 +189,20 @@ class FFmpegService:
     def _build_drawtext_filter(
         text: str,
         style: TextStyle,
-        overrides: Optional[TextOverrideOptions] = None
+        overrides: Optional[TextOverrideOptions] = None,
+        fade_out_duration: Optional[float] = None,
+        video_duration: Optional[float] = None
     ) -> str:
-        """Build FFmpeg drawtext filter string"""
+        """
+        Build FFmpeg drawtext filter string
+
+        Args:
+            text: Text to display
+            style: Text style configuration
+            overrides: Optional style overrides
+            fade_out_duration: Seconds before end to hide text (e.g., 2.5)
+            video_duration: Total video duration in seconds (required if fade_out_duration is set)
+        """
         # Escape special characters for FFmpeg
         escaped_text = FFmpegService._escape_text(text)
 
@@ -216,6 +251,17 @@ class FFmpegService:
         elif style.position == "center":
             # Default to centered alignment for center position
             filter_params.append("text_align=C")
+
+        # Add instant disappearance effect if requested
+        if fade_out_duration is not None and video_duration is not None:
+            # Calculate cutoff time (when text should disappear)
+            cutoff_time = video_duration - fade_out_duration
+
+            # Alpha expression: Full opacity until cutoff_time, then instantly invisible
+            # if(lt(t,CUTOFF_TIME),1,0)
+            alpha_expr = f"if(lt(t\\,{cutoff_time})\\,1\\,0)"
+            filter_params.append(f"alpha='{alpha_expr}'")
+            logger.info(f"Text will disappear at {cutoff_time}s (last {fade_out_duration}s hidden)")
 
         return "drawtext=" + ":".join(filter_params)
 
