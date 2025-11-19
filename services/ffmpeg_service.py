@@ -68,14 +68,15 @@ class FFmpegService:
             media_info = FFmpegService.get_media_info(input_path)
             img_width = FFmpegService._get_video_width(media_info)
 
-            # Wrap text if max_text_width_percent is specified
-            if overrides and overrides.max_text_width_percent and img_width:
+            # Wrap text if max_text_width_percent is specified (override or template default)
+            max_text_width = overrides.max_text_width_percent if (overrides and overrides.max_text_width_percent) else style.max_text_width_percent
+            if max_text_width and img_width:
                 text = FFmpegService._wrap_text(
                     text,
                     style.font_size,
                     style.font_path,
                     img_width,
-                    overrides.max_text_width_percent
+                    max_text_width
                 )
 
             # Build FFmpeg filter

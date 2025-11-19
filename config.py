@@ -58,6 +58,7 @@ class TextStyle:
     background_color: str
     background_opacity: float
     text_opacity: float
+    max_text_width_percent: int = 80
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -74,7 +75,8 @@ class TextStyle:
             "background_enabled": self.background_enabled,
             "background_color": self.background_color,
             "background_opacity": self.background_opacity,
-            "text_opacity": self.text_opacity
+            "text_opacity": self.text_opacity,
+            "max_text_width_percent": self.max_text_width_percent
         }
 
 
@@ -118,7 +120,8 @@ def get_template(template_name: str) -> TextStyle:
                 background_enabled=template_data['background_enabled'],
                 background_color=template_data['background_color'],
                 background_opacity=template_data['background_opacity'],
-                text_opacity=template_data['text_opacity']
+                text_opacity=template_data['text_opacity'],
+                max_text_width_percent=template_data.get('max_text_width_percent', 80)
             )
     except Exception as e:
         print(f"Error loading template from database: {e}")
@@ -137,7 +140,8 @@ def get_template(template_name: str) -> TextStyle:
         background_enabled=False,
         background_color="black",
         background_opacity=0.0,
-        text_opacity=1.0
+        text_opacity=1.0,
+        max_text_width_percent=80
     )
 
 
@@ -165,7 +169,8 @@ def list_templates() -> Dict[str, Dict[str, Any]]:
                 'background_enabled': template['background_enabled'],
                 'background_color': template['background_color'],
                 'background_opacity': template['background_opacity'],
-                'text_opacity': template['text_opacity']
+                'text_opacity': template['text_opacity'],
+                'max_text_width_percent': template.get('max_text_width_percent', 80)
             }
         return result
     except Exception as e:
