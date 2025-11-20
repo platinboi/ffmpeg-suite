@@ -218,7 +218,7 @@ class FFmpegService:
         # Build filter parameters
         filter_params = [
             f"fontfile={style.font_path}",
-            f"text={escaped_text}",
+            f"text='{escaped_text}'",  # Single-quoted to handle newlines and special chars
             "expansion=none",  # Disable text expansion to prevent \n → n conversion
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
@@ -296,21 +296,13 @@ class FFmpegService:
 
     @staticmethod
     def _escape_text(text: str) -> str:
-        """Escape special characters for FFmpeg drawtext filter"""
-        # FFmpeg drawtext requires escaping certain characters
-        # Escape backslashes first (must be first!)
-        text = text.replace("\\", "\\\\")
-        # Escape single quotes
-        text = text.replace("'", "\\'")
-        # Escape colons
-        text = text.replace(":", "\\:")
-        # Escape commas (used as parameter separators in FFmpeg)
-        text = text.replace(",", "\\,")
-        # Escape dollar signs (used for variable/expression expansion)
-        text = text.replace("$", "\\$")
-        # Keep actual newline characters - they work with expansion=none
-        # Do NOT convert to \n as that shows as literal 'n' with text expansion enabled
-        text = text.replace("\r", "")  # Remove carriage returns only
+        """Escape special characters for single-quoted FFmpeg drawtext text parameter"""
+        # Text parameter is wrapped in single quotes (text='...')
+        # Inside single quotes, only single quotes need escaping
+        # Escape using '\'' pattern: close quote, escaped quote, open quote
+        text = text.replace("'", "'\\''")
+        # Remove carriage returns (keep newlines - they work in quoted text)
+        text = text.replace("\r", "")
         return text
 
     @staticmethod
