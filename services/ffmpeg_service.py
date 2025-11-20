@@ -13,6 +13,10 @@ from models.schemas import TextOverrideOptions
 
 logger = logging.getLogger(__name__)
 
+# Base resolution for font size scaling (1080p width)
+# Font sizes in templates are designed for 1080p and will be scaled proportionally
+BASE_RESOLUTION_WIDTH = 1080
+
 
 class FFmpegService:
     """Handles FFmpeg text overlay operations"""
@@ -74,6 +78,17 @@ class FFmpegService:
             img_width = FFmpegService._get_video_width(media_info)
             logger.info(f"[TEXT WRAP DEBUG] img_width from media: {img_width}")
 
+            # Calculate scaled font size based on video resolution
+            # This ensures consistent visual appearance across different resolutions
+            if img_width:
+                scale_factor = img_width / BASE_RESOLUTION_WIDTH
+                scaled_font_size = int(style.font_size * scale_factor)
+                logger.info(f"[FONT SCALING] Original font_size={style.font_size}, video_width={img_width}, scale_factor={scale_factor:.3f}, scaled_font_size={scaled_font_size}")
+            else:
+                # Fallback to original font size if width cannot be determined
+                scaled_font_size = style.font_size
+                logger.warning(f"[FONT SCALING] Could not determine video width, using original font_size={style.font_size}")
+
             # Wrap text if max_text_width_percent is specified (override or template default)
             max_text_width = overrides.max_text_width_percent if (overrides and overrides.max_text_width_percent) else style.max_text_width_percent
             logger.info(f"[TEXT WRAP DEBUG] max_text_width_percent: override={overrides.max_text_width_percent if overrides else None}, style={style.max_text_width_percent}, final={max_text_width}")
@@ -82,7 +97,7 @@ class FFmpegService:
                 logger.info(f"[TEXT WRAP DEBUG] Condition passed! Wrapping text to {max_text_width}% of {img_width}px")
                 text = FFmpegService._wrap_text(
                     text,
-                    style.font_size,
+                    scaled_font_size,
                     style.font_path,
                     img_width,
                     max_text_width
@@ -110,6 +125,7 @@ class FFmpegService:
                 text,
                 style,
                 overrides,
+                scaled_font_size=scaled_font_size,
                 fade_out_duration=fade_out_duration if apply_fade_out else None,
                 video_duration=video_duration if apply_fade_out else None
             )
@@ -201,6 +217,7 @@ class FFmpegService:
         text: str,
         style: TextStyle,
         overrides: Optional[TextOverrideOptions] = None,
+        scaled_font_size: Optional[int] = None,
         fade_out_duration: Optional[float] = None,
         video_duration: Optional[float] = None
     ) -> Tuple[str, str]:
@@ -211,6 +228,7 @@ class FFmpegService:
             text: Text to display
             style: Text style configuration
             overrides: Optional style overrides
+            scaled_font_size: Font size scaled for video resolution (if None, uses style.font_size)
             fade_out_duration: Seconds before end to hide text (e.g., 2.5)
             video_duration: Total video duration in seconds (required if fade_out_duration is set)
 
@@ -239,11 +257,14 @@ class FFmpegService:
         shadow_color = FFmpegService._convert_color(style.shadow_color)
         bg_color = FFmpegService._convert_color(style.background_color)
 
+        # Use scaled font size if provided, otherwise use style font size
+        font_size = scaled_font_size if scaled_font_size is not None else style.font_size
+
         # Build filter parameters using textfile (no escaping needed)
         filter_params = [
             f"fontfile={style.font_path}",
             f"textfile={temp_file_path}",  # Use textfile - bypasses all escaping issues
-            f"fontsize={style.font_size}",
+            f"fontsize={font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
             f"y={y}",
