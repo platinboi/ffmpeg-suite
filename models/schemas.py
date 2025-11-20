@@ -75,7 +75,8 @@ class URLOverlayRequest(BaseModel):
         """Sanitize text to prevent command injection"""
         # Remove potentially dangerous characters for shell
         # Allow newlines for multi-line text support
-        dangerous_chars = ['`', '$', '"']  # Removed \n and \r, keep backslash for now
+        # Include all quote variants: straight, smart/curly (both single and double)
+        dangerous_chars = ['`', '$', '"', '"', '"', "'", ''', ''']
         for char in dangerous_chars:
             v = v.replace(char, '')
         return v.strip()
