@@ -300,8 +300,6 @@ class FFmpegService:
         # FFmpeg drawtext requires escaping certain characters
         # Escape backslashes first (must be first!)
         text = text.replace("\\", "\\\\")
-        # Escape newlines (convert actual newlines to \n sequence for FFmpeg)
-        text = text.replace("\n", "\\n")
         # Escape single quotes
         text = text.replace("'", "\\'")
         # Escape colons
@@ -310,8 +308,9 @@ class FFmpegService:
         text = text.replace(",", "\\,")
         # Escape dollar signs (used for variable/expression expansion)
         text = text.replace("$", "\\$")
-        # Remove carriage returns
-        text = text.replace("\r", "")
+        # Keep actual newline characters - they work with expansion=none
+        # Do NOT convert to \n as that shows as literal 'n' with text expansion enabled
+        text = text.replace("\r", "")  # Remove carriage returns only
         return text
 
     @staticmethod
