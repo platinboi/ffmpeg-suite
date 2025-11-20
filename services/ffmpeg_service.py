@@ -304,6 +304,8 @@ class FFmpegService:
         text = text.replace("'", "\\'")
         # Escape colons
         text = text.replace(":", "\\:")
+        # Escape commas (used as parameter separators in FFmpeg)
+        text = text.replace(",", "\\,")
         # Escape dollar signs (used for variable/expression expansion)
         text = text.replace("$", "\\$")
         # Keep actual newline characters - they work with expansion=none
