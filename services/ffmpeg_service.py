@@ -3,6 +3,7 @@ FFmpeg service for adding text overlays to images and videos
 """
 import subprocess
 import os
+import tempfile
 import re
 import logging
 from pathlib import Path
@@ -104,8 +105,8 @@ class FFmpegService:
                     logger.warning("Video duration not available, skipping text hiding")
                     apply_fade_out = False
 
-            # Build FFmpeg filter
-            filter_str = FFmpegService._build_drawtext_filter(
+            # Build FFmpeg filter (returns tuple: filter_str, temp_file_path)
+            filter_str, temp_file_path = FFmpegService._build_drawtext_filter(
                 text,
                 style,
                 overrides,
@@ -123,31 +124,41 @@ class FFmpegService:
 
             logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
 
-            # Execute FFmpeg
-            process = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120  # 2 minute timeout
-            )
+            try:
+                # Execute FFmpeg
+                process = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # 2 minute timeout
+                )
 
-            if process.returncode != 0:
-                logger.error(f"FFmpeg error: {process.stderr}")
-                raise Exception(f"FFmpeg processing failed: {process.stderr}")
+                if process.returncode != 0:
+                    logger.error(f"FFmpeg error: {process.stderr}")
+                    raise Exception(f"FFmpeg processing failed: {process.stderr}")
 
-            # Verify output file was created
-            if not os.path.exists(output_path):
-                raise Exception("Output file was not created")
+                # Verify output file was created
+                if not os.path.exists(output_path):
+                    raise Exception("Output file was not created")
 
-            output_size = os.path.getsize(output_path)
-            logger.info(f"Successfully created output file: {output_path} ({output_size} bytes)")
+                output_size = os.path.getsize(output_path)
+                logger.info(f"Successfully created output file: {output_path} ({output_size} bytes)")
 
-            return {
-                "success": True,
-                "status": "success",
-                "output_path": output_path,
-                "output_size": output_size
-            }
+                return {
+                    "success": True,
+                    "status": "success",
+                    "output_path": output_path,
+                    "output_size": output_size
+                }
+
+            finally:
+                # Clean up temporary text file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try:
+                        os.unlink(temp_file_path)
+                        logger.debug(f"Cleaned up temp text file: {temp_file_path}")
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to clean up temp file {temp_file_path}: {cleanup_error}")
 
         except subprocess.TimeoutExpired:
             raise Exception("FFmpeg processing timed out (max 2 minutes)")
@@ -192,7 +203,7 @@ class FFmpegService:
         overrides: Optional[TextOverrideOptions] = None,
         fade_out_duration: Optional[float] = None,
         video_duration: Optional[float] = None
-    ) -> str:
+    ) -> Tuple[str, str]:
         """
         Build FFmpeg drawtext filter string
 
@@ -202,9 +213,22 @@ class FFmpegService:
             overrides: Optional style overrides
             fade_out_duration: Seconds before end to hide text (e.g., 2.5)
             video_duration: Total video duration in seconds (required if fade_out_duration is set)
+
+        Returns:
+            Tuple of (filter_string, temp_file_path)
         """
-        # Escape special characters for FFmpeg
-        escaped_text = FFmpegService._escape_text(text)
+        # Write text to temporary file (avoids all FFmpeg escaping issues)
+        temp_file = tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix='.txt',
+            delete=False,
+            encoding='utf-8'
+        )
+        temp_file.write(text)
+        temp_file.close()
+        temp_file_path = temp_file.name
+
+        logger.debug(f"Created temp text file: {temp_file_path}")
 
         # Calculate position
         x, y = FFmpegService._calculate_position(style, overrides)
@@ -215,11 +239,10 @@ class FFmpegService:
         shadow_color = FFmpegService._convert_color(style.shadow_color)
         bg_color = FFmpegService._convert_color(style.background_color)
 
-        # Build filter parameters
+        # Build filter parameters using textfile (no escaping needed)
         filter_params = [
             f"fontfile={style.font_path}",
-            f"text='{escaped_text}'",  # Single-quoted to handle newlines and special chars
-            "expansion=none",  # Disable text expansion to prevent \n → n conversion
+            f"textfile={temp_file_path}",  # Use textfile - bypasses all escaping issues
             f"fontsize={style.font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
@@ -263,7 +286,8 @@ class FFmpegService:
             filter_params.append(f"alpha='{alpha_expr}'")
             logger.info(f"Text will disappear at {cutoff_time}s (last {fade_out_duration}s hidden)")
 
-        return "drawtext=" + ":".join(filter_params)
+        filter_str = "drawtext=" + ":".join(filter_params)
+        return (filter_str, temp_file_path)
 
     @staticmethod
     def _calculate_position(
@@ -293,17 +317,6 @@ class FFmpegService:
                 return (str(overrides.custom_x), str(overrides.custom_y))
 
         return positions.get(position, positions["center"])
-
-    @staticmethod
-    def _escape_text(text: str) -> str:
-        """Escape special characters for single-quoted FFmpeg drawtext text parameter"""
-        # Text parameter is wrapped in single quotes (text='...')
-        # Inside single quotes, only single quotes need escaping
-        # Escape using '\'' pattern: close quote, escaped quote, open quote
-        text = text.replace("'", "'\\''")
-        # Remove carriage returns (keep newlines - they work in quoted text)
-        text = text.replace("\r", "")
-        return text
 
     @staticmethod
     def _convert_color(color: str) -> str:
