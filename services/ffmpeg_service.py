@@ -555,81 +555,11 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Detect which inputs have audio streams and durations
-            # NOTE: Videos are pre-scaled to same resolution before merge, so no scaling needed
-            has_audio = []
-            durations = []  # List of video durations in seconds
-            for input_path in input_paths:
-                media_info = FFmpegService.get_media_info(input_path)
-
-                # Check for audio
-                audio_stream_exists = False
-                if 'streams' in media_info:
-                    for stream in media_info['streams']:
-                        if stream.get('codec_type') == 'audio':
-                            audio_stream_exists = True
-                            break
-                has_audio.append(audio_stream_exists)
-
-                # Get video duration (needed for silent audio generation)
-                duration = None
-                if 'format' in media_info and 'duration' in media_info['format']:
-                    try:
-                        duration = float(media_info['format']['duration'])
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse duration from media info for {input_path}")
-                durations.append(duration)
-
-            logger.info(f"Audio stream detection: {has_audio}")
-            logger.info(f"Video durations: {durations}")
-
-            # Determine audio handling strategy
-            all_have_audio = all(has_audio)
-            none_have_audio = not any(has_audio)
-
-            if none_have_audio:
-                # No audio in any clip - simple video-only concat
-                concat_inputs = "".join([f"[{i}:v]" for i in range(len(input_paths))])
-                concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=0[v]"
-                map_args = ['-map', '[v]']
-                logger.info("Using video-only concat (no audio streams)")
-
-            elif all_have_audio:
-                # All clips have audio - simple video+audio concat
-                concat_inputs = "".join([f"[{i}:v][{i}:a]" for i in range(len(input_paths))])
-                concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=1[v][a]"
-                map_args = ['-map', '[v]', '-map', '[a]']
-                logger.info("Using standard concat (all clips have audio)")
-
-            else:
-                # Mixed audio - add silent audio to clips without audio
-                filter_parts = []
-                inputs_with_audio = []
-
-                for i in range(len(input_paths)):
-                    if has_audio[i]:
-                        # Clip has audio - use as-is
-                        inputs_with_audio.append(f"[{i}:v][{i}:a]")
-                    else:
-                        # Clip has no audio - generate silent audio with duration
-                        duration = durations[i]
-                        if duration is None:
-                            raise ValueError(f"Could not determine duration for clip {i} to generate silent audio")
-
-                        filter_parts.append(
-                            f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{duration},asetpts=PTS-STARTPTS[silent{i}]"
-                        )
-                        inputs_with_audio.append(f"[{i}:v][silent{i}]")
-
-                # Combine filters and concat
-                if filter_parts:
-                    filter_str = ";".join(filter_parts) + ";"
-                else:
-                    filter_str = ""
-                concat_input = "".join(inputs_with_audio)
-                concat_filter = f"{filter_str}{concat_input}concat=n={len(input_paths)}:v=1:a=1[v][a]"
-                map_args = ['-map', '[v]', '-map', '[a]']
-                logger.info("Using mixed concat (adding silent audio to clips without audio)")
+            # Simple video-only concat - ignore all audio streams
+            concat_inputs = "".join([f"[{i}:v]" for i in range(len(input_paths))])
+            concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=0[v]"
+            map_args = ['-map', '[v]']
+            logger.info("Using video-only concat (audio stripped)")
 
             # Build FFmpeg command
             cmd = ['ffmpeg', '-y']
@@ -641,18 +571,11 @@ class FFmpegService:
             # Add filter_complex and output settings
             cmd.extend([
                 '-filter_complex', concat_filter,
-                *map_args,  # Unpack map arguments (varies based on audio strategy)
+                *map_args,
                 '-c:v', 'libx264',  # H.264 video codec
                 '-preset', 'slow',  # Encoding speed/quality tradeoff (slow = better quality)
                 '-crf', '18',  # Constant Rate Factor (18 = high quality, lower = better)
             ])
-
-            # Only add audio codec settings if we have audio
-            if not none_have_audio:
-                cmd.extend([
-                    '-c:a', 'aac',  # AAC audio codec
-                    '-b:a', '192k',  # Audio bitrate (higher quality audio)
-                ])
 
             cmd.extend([
                 '-movflags', '+faststart',  # Enable streaming
