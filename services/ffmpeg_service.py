@@ -555,11 +555,17 @@ class FFmpegService:
 
             logger.info(f"Merging {len(input_paths)} videos into {output_path}")
 
-            # Simple video-only concat - ignore all audio streams
-            concat_inputs = "".join([f"[{i}:v]" for i in range(len(input_paths))])
-            concat_filter = f"{concat_inputs}concat=n={len(input_paths)}:v=1:a=0[v]"
+            # Normalize fps and pixel format before concat to prevent timestamp issues
+            # Different frame rates between clips cause corrupted playback
+            normalize_filters = []
+            normalized_inputs = []
+            for i in range(len(input_paths)):
+                normalize_filters.append(f"[{i}:v]fps=30,format=yuv420p[v{i}]")
+                normalized_inputs.append(f"[v{i}]")
+
+            concat_filter = ";".join(normalize_filters) + ";" + "".join(normalized_inputs) + f"concat=n={len(input_paths)}:v=1:a=0[v]"
             map_args = ['-map', '[v]']
-            logger.info("Using video-only concat (audio stripped)")
+            logger.info("Using video-only concat with fps/format normalization")
 
             # Build FFmpeg command
             cmd = ['ffmpeg', '-y']
