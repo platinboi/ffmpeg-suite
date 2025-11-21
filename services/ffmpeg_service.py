@@ -617,7 +617,7 @@ class FFmpegService:
                             raise ValueError(f"Could not determine duration for clip {i} to generate silent audio")
 
                         filter_parts.append(
-                            f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={duration}[silent{i}]"
+                            f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{duration},asetpts=PTS-STARTPTS[silent{i}]"
                         )
                         inputs_with_audio.append(f"[{i}:v][silent{i}]")
 
