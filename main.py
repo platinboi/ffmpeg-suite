@@ -267,13 +267,51 @@ async def merge_clips_with_overlays(
             has_custom_overrides=any(clip.overrides for clip in request.clips)
         )
 
-        # Return merged file as download
-        return FileResponse(
-            path=output_path,
-            filename=output_filename,
-            media_type=f"video/{output_format}",
-            background=_cleanup_files([output_path])
-        )
+        # Handle response format
+        if request.response_format == "url":
+            # Upload to R2 and return URL
+            if not storage_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="R2 storage is not enabled. Set R2_ENABLED=true in environment."
+                )
+
+            r2_url = await storage_service.upload_file(
+                file_path=output_path,
+                object_name=None,
+                user_id=None,
+                file_type="outputs",
+                public=True
+            )
+
+            if not r2_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to upload to R2 storage"
+                )
+
+            # Cleanup temp file
+            download_service.cleanup_file(output_path)
+
+            # Return JSON with URL
+            return JSONResponse(
+                content=MergeResponse(
+                    status="success",
+                    message=f"Successfully merged {len(request.clips)} clips",
+                    filename=output_filename,
+                    clips_processed=len(request.clips),
+                    processing_time=processing_time,
+                    total_duration=result.get('duration')
+                ).model_dump()
+            )
+        else:
+            # Default: Return binary file
+            return FileResponse(
+                path=output_path,
+                filename=output_filename,
+                media_type=f"video/{output_format}",
+                background=_cleanup_files([output_path])
+            )
 
     except ValueError as e:
         logger.error(f"Validation error in merge request: {str(e)}")
@@ -478,13 +516,51 @@ async def overlay_from_url(request: URLOverlayRequest, http_request: Request):
             has_custom_overrides=request.overrides is not None
         )
 
-        # Return file as download
-        return FileResponse(
-            path=output_path,
-            filename=output_filename,
-            media_type=content_type,
-            background=_cleanup_files([input_path, output_path])
-        )
+        # Handle response format
+        if request.response_format == "url":
+            # Upload to R2 and return URL
+            if not storage_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="R2 storage is not enabled. Set R2_ENABLED=true in environment."
+                )
+
+            r2_url = await storage_service.upload_file(
+                file_path=output_path,
+                object_name=None,
+                user_id=None,
+                file_type="outputs",
+                public=True
+            )
+
+            if not r2_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to upload to R2 storage"
+                )
+
+            # Cleanup temp files
+            download_service.cleanup_file(input_path)
+            download_service.cleanup_file(output_path)
+
+            # Return JSON with URL
+            return JSONResponse(
+                content=OverlayResponse(
+                    status="success",
+                    message="Overlay applied successfully",
+                    filename=output_filename,
+                    download_url=r2_url,
+                    processing_time=processing_time
+                ).model_dump()
+            )
+        else:
+            # Default: Return binary file
+            return FileResponse(
+                path=output_path,
+                filename=output_filename,
+                media_type=content_type,
+                background=_cleanup_files([input_path, output_path])
+            )
 
     except Exception as e:
         # Cleanup on error
@@ -507,6 +583,7 @@ async def overlay_from_upload(
     template: str = Form("default"),
     overrides: Optional[str] = Form(None),
     output_format: str = Form("same"),
+    response_format: str = Form("binary"),
     http_request: Request = None
 ):
     """
@@ -618,13 +695,51 @@ async def overlay_from_upload(
             has_custom_overrides=override_options is not None
         )
 
-        # Return file as download
-        return FileResponse(
-            path=output_path,
-            filename=output_filename,
-            media_type=file.content_type,
-            background=_cleanup_files([input_path, output_path])
-        )
+        # Handle response format
+        if response_format == "url":
+            # Upload to R2 and return URL
+            if not storage_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="R2 storage is not enabled. Set R2_ENABLED=true in environment."
+                )
+
+            r2_url = await storage_service.upload_file(
+                file_path=output_path,
+                object_name=None,
+                user_id=None,
+                file_type="outputs",
+                public=True
+            )
+
+            if not r2_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to upload to R2 storage"
+                )
+
+            # Cleanup temp files
+            download_service.cleanup_file(input_path)
+            download_service.cleanup_file(output_path)
+
+            # Return JSON with URL
+            return JSONResponse(
+                content=OverlayResponse(
+                    status="success",
+                    message="Overlay applied successfully",
+                    filename=output_filename,
+                    download_url=r2_url,
+                    processing_time=processing_time
+                ).model_dump()
+            )
+        else:
+            # Default: Return binary file
+            return FileResponse(
+                path=output_path,
+                filename=output_filename,
+                media_type=file.content_type,
+                background=_cleanup_files([input_path, output_path])
+            )
 
     except HTTPException:
         # Re-raise HTTP exceptions

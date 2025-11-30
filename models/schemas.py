@@ -68,6 +68,7 @@ class URLOverlayRequest(BaseModel):
     template: Optional[Literal["default"]] = "default"
     overrides: Optional[TextOverrideOptions] = None
     output_format: Optional[Literal["same", "mp4", "jpg", "png"]] = "same"
+    response_format: Optional[Literal["binary", "url"]] = "binary"
 
     @field_validator("text")
     @classmethod
@@ -88,6 +89,7 @@ class UploadOverlayRequest(BaseModel):
     template: Optional[Literal["default"]] = "default"
     overrides: Optional[str] = None  # JSON string of TextOverrideOptions
     output_format: Optional[Literal["same", "mp4", "jpg", "png"]] = "same"
+    response_format: Optional[Literal["binary", "url"]] = "binary"
 
     @field_validator("text")
     @classmethod
@@ -209,6 +211,7 @@ class MergeRequest(BaseModel):
     """Request model for merging multiple clips with overlays"""
     clips: List[ClipConfig] = Field(..., min_length=2, max_length=10, description="2-10 clips to merge")
     output_format: Literal["mp4", "mov"] = "mp4"
+    response_format: Optional[Literal["binary", "url"]] = "binary"
 
 
 class MergeResponse(BaseModel):

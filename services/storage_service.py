@@ -61,12 +61,28 @@ class StorageService:
         month = datetime.now().strftime('%Y-%m')
         return f"users/{user_id}/{file_type}/{month}/{filename}"
 
+    def get_simple_date_path(self, filename: str) -> str:
+        """
+        Generate simple date-based path for public outputs
+        Format: outputs/YYYY-MM-DD/filename.mp4
+
+        Args:
+            filename: Name of the file
+
+        Returns:
+            Path like: outputs/2024-11-30/filename.mp4
+        """
+        from datetime import datetime
+        date = datetime.now().strftime('%Y-%m-%d')
+        return f"outputs/{date}/{filename}"
+
     async def upload_file(
         self,
         file_path: str,
         object_name: Optional[str] = None,
         user_id: Optional[str] = None,
-        file_type: str = "outputs"
+        file_type: str = "outputs",
+        public: bool = False
     ) -> Optional[str]:
         """
         Upload a file to R2 bucket with optional user scoping
@@ -76,6 +92,7 @@ class StorageService:
             object_name: S3 object name (if None, generates from file_path)
             user_id: User ID for multi-tenant scoping (if provided)
             file_type: 'inputs' or 'outputs' (used with user_id)
+            public: If True, upload with public-read ACL and use simple date path
 
         Returns:
             Public URL of uploaded file, or None if upload failed
@@ -86,23 +103,28 @@ class StorageService:
 
         if object_name is None:
             filename = os.path.basename(file_path)
-            if user_id:
+            if public:
+                # Use simple date-based path for public URLs
+                object_name = self.get_simple_date_path(filename)
+            elif user_id:
+                # Use user-scoped path for private files
                 object_name = self.get_user_path(user_id, file_type, filename)
             else:
                 object_name = filename
 
         try:
-            # Upload file (private by default for security)
+            # Upload file with appropriate ACL
+            acl = 'public-read' if public else 'private'
             self.client.upload_file(
                 file_path,
                 self.bucket_name,
                 object_name,
-                ExtraArgs={'ACL': 'private'}  # Changed to private for security
+                ExtraArgs={'ACL': acl}
             )
 
-            # Generate public URL (will need presigned URL for private files)
+            # Generate public URL
             url = f"https://{self.bucket_name}.r2.dev/{object_name}"
-            logger.info(f"Uploaded file to R2: {object_name}")
+            logger.info(f"Uploaded file to R2: {object_name} (public={public})")
 
             return url
 
