@@ -46,12 +46,12 @@ class TemplateService:
                     name, font_path, font_size, font_weight, text_color,
                     border_width, border_color, shadow_x, shadow_y, shadow_color,
                     position, background_enabled, background_color,
-                    background_opacity, text_opacity, alignment, max_text_width_percent
+                    background_opacity, text_opacity, alignment, max_text_width_percent, line_spacing
                 ) VALUES (
                     %(name)s, %(font_path)s, %(font_size)s, %(font_weight)s, %(text_color)s,
                     %(border_width)s, %(border_color)s, %(shadow_x)s, %(shadow_y)s, %(shadow_color)s,
                     %(position)s, %(background_enabled)s, %(background_color)s,
-                    %(background_opacity)s, %(text_opacity)s, %(alignment)s, %(max_text_width_percent)s
+                    %(background_opacity)s, %(text_opacity)s, %(alignment)s, %(max_text_width_percent)s, %(line_spacing)s
                 )
                 RETURNING *
             """, template_data)
@@ -236,7 +236,8 @@ class TemplateService:
             'background_opacity': 0.0,
             'text_opacity': 1.0,
             'alignment': 'center',
-            'max_text_width_percent': 80
+            'max_text_width_percent': 80,
+            'line_spacing': -8
         }
 
         with self.db.get_connection() as conn:
@@ -246,13 +247,13 @@ class TemplateService:
                     name, font_path, font_size, font_weight, text_color,
                     border_width, border_color, shadow_x, shadow_y, shadow_color,
                     position, background_enabled, background_color,
-                    background_opacity, text_opacity, alignment, max_text_width_percent,
+                    background_opacity, text_opacity, alignment, max_text_width_percent, line_spacing,
                     is_default
                 ) VALUES (
                     %(name)s, %(font_path)s, %(font_size)s, %(font_weight)s, %(text_color)s,
                     %(border_width)s, %(border_color)s, %(shadow_x)s, %(shadow_y)s, %(shadow_color)s,
                     %(position)s, %(background_enabled)s, %(background_color)s,
-                    %(background_opacity)s, %(text_opacity)s, %(alignment)s, %(max_text_width_percent)s,
+                    %(background_opacity)s, %(text_opacity)s, %(alignment)s, %(max_text_width_percent)s, %(line_spacing)s,
                     TRUE
                 )
             """, default_template)

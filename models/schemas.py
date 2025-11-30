@@ -28,6 +28,7 @@ class TextOverrideOptions(BaseModel):
     custom_y: Optional[int] = Field(None, ge=0)
     alignment: Optional[Literal["left", "center", "right"]] = None
     max_text_width_percent: Optional[int] = Field(None, ge=10, le=100)
+    line_spacing: Optional[int] = Field(None, ge=-50, le=50)  # Negative for tighter spacing
 
     @field_validator("text_color", "border_color", "shadow_color", "background_color")
     @classmethod
@@ -150,6 +151,7 @@ class TemplateCreate(BaseModel):
     text_opacity: float = Field(..., ge=0.0, le=1.0)
     alignment: Literal["left", "center", "right"] = "center"
     max_text_width_percent: int = Field(default=80, ge=10, le=100)
+    line_spacing: int = Field(default=-8, ge=-50, le=50)
 
     @field_validator("text_color", "border_color", "shadow_color", "background_color")
     @classmethod
@@ -189,6 +191,7 @@ class TemplateResponse(BaseModel):
     text_opacity: float
     alignment: str
     max_text_width_percent: int
+    line_spacing: int
     created_at: str
     updated_at: str
     is_default: bool

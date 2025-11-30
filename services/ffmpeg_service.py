@@ -296,6 +296,10 @@ class FFmpegService:
             # Default to centered alignment for center position
             filter_params.append("text_align=C")
 
+        # Add line spacing (negative for tighter TikTok-style spacing)
+        line_spacing = overrides.line_spacing if (overrides and overrides.line_spacing is not None) else style.line_spacing
+        filter_params.append(f"line_spacing={line_spacing}")
+
         # Add instant disappearance effect if requested
         if fade_out_duration is not None and video_duration is not None:
             # Calculate cutoff time (when text should disappear)

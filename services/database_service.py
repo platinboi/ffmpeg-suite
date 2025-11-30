@@ -127,6 +127,22 @@ class DatabaseService:
                 END $$;
             """)
 
+            # Migration: Add line_spacing column if it doesn't exist
+            # This handles existing tables that were created before this column was added
+            cursor.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'templates'
+                        AND column_name = 'line_spacing'
+                    ) THEN
+                        ALTER TABLE templates
+                        ADD COLUMN line_spacing INTEGER DEFAULT -8;
+                    END IF;
+                END $$;
+            """)
+
             # Create updated_at trigger
             cursor.execute("""
                 CREATE OR REPLACE FUNCTION update_updated_at_column()
