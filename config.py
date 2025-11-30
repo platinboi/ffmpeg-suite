@@ -36,6 +36,7 @@ class Config:
     R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
     R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
     R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "")
+    R2_CUSTOM_DOMAIN = os.getenv("R2_CUSTOM_DOMAIN", "")  # Optional custom domain
 
     # Merge/Concat Configuration
     MAX_MERGE_CLIPS = int(os.getenv("MAX_MERGE_CLIPS", 10))  # Maximum clips per merge request

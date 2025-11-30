@@ -35,6 +35,7 @@ class StorageService:
                     )
                 )
                 self.bucket_name = Config.R2_BUCKET_NAME
+                self.custom_domain = Config.R2_CUSTOM_DOMAIN
                 logger.info("R2 storage service initialized successfully")
             except ImportError:
                 logger.warning("boto3 not installed - R2 storage disabled")
@@ -63,18 +64,30 @@ class StorageService:
 
     def get_simple_date_path(self, filename: str) -> str:
         """
-        Generate simple date-based path for public outputs
-        Format: outputs/YYYY-MM-DD/filename.mp4
+        Generate human-readable timestamp path for public outputs in ffmpeg folder
+        Format: ffmpeg/ffmpeg_HH-MM-SS_DD-MM-YYYY.ext
+        Example: ffmpeg/ffmpeg_14-28-13_30-11-2025.mp4 (2:28:13 PM on Nov 30, 2025)
 
         Args:
-            filename: Name of the file
+            filename: Name of the file (extracts extension only)
 
         Returns:
-            Path like: outputs/2024-11-30/filename.mp4
+            Path like: ffmpeg/ffmpeg_14-28-13_30-11-2025.mp4
         """
         from datetime import datetime
-        date = datetime.now().strftime('%Y-%m-%d')
-        return f"outputs/{date}/{filename}"
+        import os
+
+        # Extract extension only
+        _, ext = os.path.splitext(filename)
+
+        # Create human-readable timestamp: HH-MM-SS_DD-MM-YYYY
+        now = datetime.now()
+        time_part = f"{now.hour:02d}-{now.minute:02d}-{now.second:02d}"
+        date_part = f"{now.day:02d}-{now.month:02d}-{now.year}"
+
+        # Construct final path with underscore separator for readability
+        new_filename = f"ffmpeg_{time_part}_{date_part}{ext}"
+        return f"ffmpeg/{new_filename}"
 
     async def upload_file(
         self,
@@ -122,8 +135,11 @@ class StorageService:
                 ExtraArgs={'ACL': acl}
             )
 
-            # Generate public URL
-            url = f"https://{self.bucket_name}.r2.dev/{object_name}"
+            # Generate public URL using custom domain if configured
+            if self.custom_domain:
+                url = f"https://{self.custom_domain}/{object_name}"
+            else:
+                url = f"https://{self.bucket_name}.r2.dev/{object_name}"
             logger.info(f"Uploaded file to R2: {object_name} (public={public})")
 
             return url
@@ -170,8 +186,11 @@ class StorageService:
         if not self.enabled:
             return None
 
-        # Note: Customize this URL based on your R2 bucket configuration
-        return f"https://{self.bucket_name}.r2.dev/{object_name}"
+        # Use custom domain if configured, otherwise use R2 dev domain
+        if self.custom_domain:
+            return f"https://{self.custom_domain}/{object_name}"
+        else:
+            return f"https://{self.bucket_name}.r2.dev/{object_name}"
 
 
 # Example usage for future implementation:
