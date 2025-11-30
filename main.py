@@ -299,6 +299,7 @@ async def merge_clips_with_overlays(
                     status="success",
                     message=f"Successfully merged {len(request.clips)} clips",
                     filename=output_filename,
+                    download_url=r2_url,
                     clips_processed=len(request.clips),
                     processing_time=processing_time,
                     total_duration=result.get('duration')

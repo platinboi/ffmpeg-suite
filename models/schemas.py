@@ -219,6 +219,7 @@ class MergeResponse(BaseModel):
     status: Literal["success", "error"]
     message: str
     filename: Optional[str] = None
+    download_url: Optional[str] = None
     clips_processed: Optional[int] = None
     processing_time: Optional[float] = None
     total_duration: Optional[float] = None
