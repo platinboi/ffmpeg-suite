@@ -74,12 +74,29 @@ class MergeService:
         try:
             # Get target resolution from first clip
             first_clip_path = downloaded_clips[0][0]
+
+            # Verify file exists before probing
+            if not os.path.exists(first_clip_path):
+                raise FileNotFoundError(f"First clip file not found: {first_clip_path}")
+
             media_info = self.ffmpeg_service.get_media_info(first_clip_path)
+
+            # Check if probe succeeded
+            if not media_info or 'streams' not in media_info:
+                raise ValueError(
+                    f"Could not probe first clip. File may be corrupted or invalid. "
+                    f"Path: {first_clip_path}"
+                )
+
             target_width = self.ffmpeg_service._get_video_width(media_info)
             target_height = self.ffmpeg_service._get_video_height(media_info)
 
             if target_width is None or target_height is None:
-                raise ValueError("Could not determine resolution of first clip")
+                raise ValueError(
+                    f"Could not determine resolution of first clip. "
+                    f"Path: {first_clip_path}, "
+                    f"Media info: {media_info.get('streams', [])[:1]}"
+                )
 
             logger.info(f"Target resolution from first clip: {target_width}x{target_height}")
 

@@ -421,12 +421,13 @@ class FFmpegService:
                 file_path
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
                 import json
                 return json.loads(result.stdout)
             else:
+                logger.error(f"ffprobe failed for {file_path}: {result.stderr}")
                 return {}
 
         except Exception as e:
