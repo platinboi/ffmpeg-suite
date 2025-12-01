@@ -244,10 +244,12 @@ async def merge_clips_with_overlays(
             for clip in request.clips
         ]
 
-        # Process merge request (download, overlay, merge)
+        # Process merge request (download, trim if requested, overlay, merge)
         result = await merge_service.process_merge_request(
             clip_configs=clip_configs,
-            output_path=output_path
+            output_path=output_path,
+            first_clip_duration=request.first_clip_duration,
+            first_clip_trim_mode=request.first_clip_trim_mode or "both"
         )
 
         processing_time = time.time() - start_time

@@ -216,6 +216,18 @@ class MergeRequest(BaseModel):
     output_format: Literal["mp4", "mov"] = "mp4"
     response_format: Optional[Literal["binary", "url"]] = "binary"
 
+    # First clip trimming options
+    first_clip_duration: Optional[float] = Field(
+        None,
+        gt=0,
+        le=300,
+        description="Target duration in seconds for the first clip. If not set, uses full clip length."
+    )
+    first_clip_trim_mode: Optional[Literal["start", "end", "both"]] = Field(
+        "both",
+        description="Where to trim from: 'start' (remove from beginning), 'end' (remove from end), 'both' (split equally)"
+    )
+
 
 class MergeResponse(BaseModel):
     """Response model for merge operations"""

@@ -5,7 +5,7 @@ import asyncio
 import os
 import uuid
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from config import Config
 from services.download_service import DownloadService
 from services.ffmpeg_service import FFmpegService
@@ -282,17 +282,21 @@ class MergeService:
     async def process_merge_request(
         self,
         clip_configs: List[Dict],
-        output_path: str
+        output_path: str,
+        first_clip_duration: Optional[float] = None,
+        first_clip_trim_mode: str = "both"
     ) -> Dict:
         """
         Main entry point: Download, scale, overlay, and merge clips
 
-        New workflow: Download → Scale → Overlay → Merge
+        New workflow: Download → Trim (optional) → Scale → Overlay → Merge
         This ensures text overlays wrap correctly to target canvas dimensions
 
         Args:
             clip_configs: List of clip configurations
             output_path: Path for final merged output
+            first_clip_duration: Optional target duration for first clip in seconds
+            first_clip_trim_mode: Where to trim from: 'start', 'end', or 'both'
 
         Returns:
             Dict with processing metadata
@@ -303,6 +307,7 @@ class MergeService:
         downloaded_paths = []
         scaled_paths = []
         overlayed_paths = []
+        trimmed_path = None
 
         try:
             # Step 1: Validate request
@@ -312,6 +317,32 @@ class MergeService:
             clip_urls = [config['url'] for config in clip_configs]
             downloaded_clips = await self.download_clips(clip_urls)
             downloaded_paths = [path for path, _ in downloaded_clips]
+
+            # Step 2.5: Trim first clip if requested
+            if first_clip_duration is not None and len(downloaded_clips) > 0:
+                first_clip_path, first_clip_type = downloaded_clips[0]
+                trimmed_path = first_clip_path.replace('.mp4', '_trimmed.mp4')
+                if not trimmed_path.endswith('.mp4'):
+                    trimmed_path = first_clip_path + '_trimmed.mp4'
+
+                trim_result = await self.ffmpeg_service.trim_video(
+                    input_path=first_clip_path,
+                    output_path=trimmed_path,
+                    target_duration=first_clip_duration,
+                    trim_mode=first_clip_trim_mode
+                )
+
+                if trim_result['trimmed']:
+                    # Replace first clip with trimmed version
+                    downloaded_clips[0] = (trimmed_path, first_clip_type)
+                    # Clean up original untrimmed file immediately
+                    self.cleanup_file(first_clip_path)
+                    # Update downloaded_paths to include trimmed file for later cleanup
+                    downloaded_paths[0] = trimmed_path
+                    logger.info(f"First clip trimmed: {trim_result['original_duration']:.2f}s → {first_clip_duration}s (mode={first_clip_trim_mode})")
+                else:
+                    # Trimming was skipped, remove unused trimmed_path
+                    trimmed_path = None
 
             # Step 3: Scale all clips to match first clip's resolution
             scaled_paths, target_width, target_height = self.scale_clips_to_target(downloaded_clips)

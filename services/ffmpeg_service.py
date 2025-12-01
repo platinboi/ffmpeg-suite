@@ -531,6 +531,77 @@ class FFmpegService:
 
         return '\n'.join(wrapped_lines)
 
+    async def trim_video(
+        self,
+        input_path: str,
+        output_path: str,
+        target_duration: float,
+        trim_mode: str = "both"
+    ) -> Dict[str, Any]:
+        """
+        Trim a video to a target duration.
+
+        Args:
+            input_path: Path to input video
+            output_path: Path to output trimmed video
+            target_duration: Desired duration in seconds
+            trim_mode: 'start' (cut from beginning), 'end' (cut from end), 'both' (split equally)
+
+        Returns:
+            Dict with success status and new duration
+        """
+        import asyncio
+
+        # Get original duration
+        media_info = await self.get_media_info(input_path)
+        original_duration = float(media_info['format']['duration'])
+
+        # Validate: can't extend, only trim
+        if target_duration >= original_duration:
+            logger.info(f"Target duration {target_duration}s >= original {original_duration}s, skipping trim")
+            return {"trimmed": False, "duration": original_duration}
+
+        # Calculate trim amounts
+        trim_total = original_duration - target_duration
+
+        if trim_mode == "start":
+            start_time = trim_total
+            end_time = original_duration
+        elif trim_mode == "end":
+            start_time = 0
+            end_time = target_duration
+        else:  # "both"
+            start_time = trim_total / 2
+            end_time = original_duration - (trim_total / 2)
+
+        # FFmpeg trim command with accurate seeking (-ss after -i)
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-ss', str(start_time),
+            '-to', str(end_time),
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '18',
+            '-an',  # No audio (consistent with merge pipeline)
+            output_path
+        ]
+
+        logger.info(f"Trimming video: {original_duration:.2f}s → {target_duration:.2f}s (mode={trim_mode}, start={start_time:.2f}s, end={end_time:.2f}s)")
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            raise RuntimeError(f"FFmpeg trim failed: {stderr.decode()}")
+
+        logger.info(f"Successfully trimmed video to {target_duration}s")
+        return {"trimmed": True, "duration": target_duration, "original_duration": original_duration}
+
     @staticmethod
     def merge_videos(
         input_paths: List[str],
