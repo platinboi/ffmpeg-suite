@@ -552,8 +552,8 @@ class FFmpegService:
         """
         import asyncio
 
-        # Get original duration
-        media_info = await self.get_media_info(input_path)
+        # Get original duration (get_media_info is synchronous)
+        media_info = self.get_media_info(input_path)
         original_duration = float(media_info['format']['duration'])
 
         # Validate: can't extend, only trim
