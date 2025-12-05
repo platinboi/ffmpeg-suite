@@ -202,6 +202,10 @@ class OutfitService:
             filters.append(f"[{prev}][img{i}]overlay={x}:{y}:shortest=1[{next_label}]")
             prev = next_label
 
+        # Fade in the collage base (but not the heading text)
+        filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_base]")
+        prev = "faded_base"
+
         # Titles
         font_path = Config.TIKTOK_SANS_SEMIBOLD
         filters.append(
@@ -234,7 +238,8 @@ class OutfitService:
             prev = next_label
 
         # Fade in and pixel format
-        filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in},format=yuv420p[video_out]")
+        # Final format conversion
+        filters.append(f"[{prev}]format=yuv420p[video_out]")
 
         return ";".join(filters)
 
