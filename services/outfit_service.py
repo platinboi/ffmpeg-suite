@@ -179,7 +179,7 @@ class OutfitService:
         # Prepare scaled inputs
         for idx in range(1, 10):
             filters.append(
-                f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=cover,"
+                f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=increase,"
                 f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1[img{idx}]"
             )
 
