@@ -6,10 +6,15 @@ import os
 import tempfile
 import uuid
 import logging
+import random
 from typing import List, Tuple, Dict
 
 from config import Config
-from models.schemas import OutfitRequest
+from models.schemas import (
+    OutfitRequest,
+    MIN_OUTFIT_FADE_IN,
+    MAX_OUTFIT_FADE_IN
+)
 from services.download_service import DownloadService
 
 logger = logging.getLogger(__name__)
@@ -25,8 +30,8 @@ class OutfitService:
     TILE_Y = [435, 891, 1361]
     LABEL_OFFSET_Y = -70
     LABEL_FONT_SIZE = 80
-    TITLE_FONT_SIZE = 86
-    SUBTITLE_FONT_SIZE = 50
+    TITLE_FONT_SIZE = 80
+    SUBTITLE_FONT_SIZE = 46
     BORDER_WIDTH = 6
     SHADOW_X = 3
     SHADOW_Y = 3
@@ -65,10 +70,16 @@ class OutfitService:
             main_title_file = self._write_text_file(request.main_title, text_files)
             subtitle_file = self._write_text_file(request.subtitle or "", text_files)
 
+            fade_in = (
+                request.fade_in
+                if request.fade_in is not None
+                else random.uniform(MIN_OUTFIT_FADE_IN, MAX_OUTFIT_FADE_IN)
+            )
+
             filter_complex = self._build_filter(
                 main_title_file=main_title_file,
                 subtitle_file=subtitle_file,
-                fade_in=request.fade_in
+                fade_in=fade_in
             )
 
             # Build FFmpeg command
@@ -197,7 +208,7 @@ class OutfitService:
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{main_title_file}':"
             f"fontsize={self.TITLE_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
             f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-            f"x=(w-text_w)/2:y=186[txt_main]"
+            f"x=(w-text_w)/2:y=170[txt_main]"
         )
         prev = "txt_main"
 
@@ -205,7 +216,7 @@ class OutfitService:
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{subtitle_file}':"
             f"fontsize={self.SUBTITLE_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
             f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-            f"x=(w-text_w)/2:y=263[txt_sub]"
+            f"x=(w-text_w)/2:y=285[txt_sub]"
         )
         prev = "txt_sub"
 

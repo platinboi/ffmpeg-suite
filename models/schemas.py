@@ -5,12 +5,12 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 from typing import Optional, Literal, List
 import re
 
-DEFAULT_OUTFIT_DURATION = 5.0
+DEFAULT_OUTFIT_DURATION = 6.0
 MIN_OUTFIT_DURATION = 5.0
 MAX_OUTFIT_DURATION = 7.0
-DEFAULT_OUTFIT_FADE_IN = 1.5
+DEFAULT_OUTFIT_FADE_IN = None  # Randomized when not provided
 MIN_OUTFIT_FADE_IN = 1.5
-MAX_OUTFIT_FADE_IN = 2.0
+MAX_OUTFIT_FADE_IN = 2.5
 
 
 class TextOverrideOptions(BaseModel):
@@ -253,7 +253,7 @@ class OutfitRequest(BaseModel):
     main_title: str = Field(..., min_length=1, max_length=200)
     subtitle: str = Field("", min_length=0, max_length=200)
     duration: float = Field(DEFAULT_OUTFIT_DURATION, ge=MIN_OUTFIT_DURATION, le=MAX_OUTFIT_DURATION)
-    fade_in: float = Field(DEFAULT_OUTFIT_FADE_IN, ge=MIN_OUTFIT_FADE_IN, le=MAX_OUTFIT_FADE_IN)
+    fade_in: Optional[float] = Field(DEFAULT_OUTFIT_FADE_IN, ge=MIN_OUTFIT_FADE_IN, le=MAX_OUTFIT_FADE_IN)
     response_format: Optional[Literal["binary", "url"]] = "url"
 
     @field_validator("image_urls")
