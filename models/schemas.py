@@ -5,6 +5,13 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 from typing import Optional, Literal, List
 import re
 
+DEFAULT_OUTFIT_DURATION = 5.0
+MIN_OUTFIT_DURATION = 5.0
+MAX_OUTFIT_DURATION = 7.0
+DEFAULT_OUTFIT_FADE_IN = 1.5
+MIN_OUTFIT_FADE_IN = 1.5
+MAX_OUTFIT_FADE_IN = 2.0
+
 
 class TextOverrideOptions(BaseModel):
     """Optional overrides for text styling"""
@@ -238,3 +245,30 @@ class MergeResponse(BaseModel):
     clips_processed: Optional[int] = None
     processing_time: Optional[float] = None
     total_duration: Optional[float] = None
+
+
+class OutfitRequest(BaseModel):
+    """Request model for outfit collage video"""
+    image_urls: List[HttpUrl] = Field(..., min_length=9, max_length=9)
+    main_title: str = Field(..., min_length=1, max_length=200)
+    subtitle: str = Field("", min_length=0, max_length=200)
+    duration: float = Field(DEFAULT_OUTFIT_DURATION, ge=MIN_OUTFIT_DURATION, le=MAX_OUTFIT_DURATION)
+    fade_in: float = Field(DEFAULT_OUTFIT_FADE_IN, ge=MIN_OUTFIT_FADE_IN, le=MAX_OUTFIT_FADE_IN)
+    response_format: Optional[Literal["binary", "url"]] = "url"
+
+    @field_validator("image_urls")
+    @classmethod
+    def validate_image_count(cls, v: List[HttpUrl]) -> List[HttpUrl]:
+        """Ensure exactly nine images are provided"""
+        if len(v) != 9:
+            raise ValueError("Exactly 9 image URLs are required")
+        return v
+
+
+class OutfitResponse(BaseModel):
+    """Response model for outfit endpoint"""
+    status: Literal["success", "error"]
+    message: str
+    filename: Optional[str] = None
+    download_url: Optional[str] = None
+    processing_time: Optional[float] = None

@@ -140,6 +140,54 @@ curl http://localhost:8000/templates
 }
 ```
 
+### 5. Outfit Collage (New)
+
+**Endpoint**: `POST /outfit`
+
+Generate a 5–7 second 9:16 video using 9 square product images laid out exactly like `OUTFIT-EXAMPLE.jpg`, with configurable title and subtitle. Default duration is 5s with 1.5s fade-in from black. Text style uses white with black outline/shadow (same as example).
+
+```bash
+curl -X POST "http://localhost:8000/outfit" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <your-key>" \
+  -d '{
+    "image_urls": [
+      "https://example.com/img1.jpg",
+      "https://example.com/img2.jpg",
+      "https://example.com/img3.jpg",
+      "https://example.com/img4.jpg",
+      "https://example.com/img5.jpg",
+      "https://example.com/img6.jpg",
+      "https://example.com/img7.jpg",
+      "https://example.com/img8.jpg",
+      "https://example.com/img9.jpg"
+    ],
+    "main_title": "Choose your school outfit:",
+    "subtitle": "(shop in bio)",
+    "duration": 5,
+    "fade_in": 1.5,
+    "response_format": "url"
+  }'
+```
+
+**Key parameters**
+- `image_urls` (required): exactly 9 image URLs (JPG/PNG)
+- `main_title` / `subtitle`: text shown at the top
+- `duration`: 5–7 seconds (default 5)
+- `fade_in`: 1.5–2 seconds (default 1.5)
+- `response_format`: `url` (uploads to R2 `outfits/`) or `binary`
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Outfit video created successfully",
+  "filename": "outfit_<uuid>.mp4",
+  "download_url": "https://<bucket>.r2.dev/outfits/outfit_<uuid>.mp4",
+  "processing_time": 1.8
+}
+```
+
 ### 4. Health Check
 
 **Endpoint**: `GET /health`
