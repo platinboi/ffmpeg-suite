@@ -191,8 +191,7 @@ class OutfitService:
         for idx in range(1, 10):
             filters.append(
                 f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=increase,"
-                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1,"
-                f"fade=t=in:st=0:d={fade_in}[img{idx}]"
+                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1[img{idx}]"
             )
 
         # Overlay tiles
@@ -203,7 +202,11 @@ class OutfitService:
             filters.append(f"[{prev}][img{i}]overlay={x}:{y}:shortest=1[{next_label}]")
             prev = next_label
 
-        # Titles
+        # Fade body (images + labels) before adding always-visible header text
+        filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
+        prev = "faded_body"
+
+        # Titles (do NOT fade)
         font_path = Config.TIKTOK_SANS_SEMIBOLD
         filters.append(
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{main_title_file}':"
