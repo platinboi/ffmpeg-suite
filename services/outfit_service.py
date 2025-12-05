@@ -30,8 +30,8 @@ class OutfitService:
     TILE_Y = [435, 891, 1361]
     LABEL_OFFSET_Y = -70
     LABEL_FONT_SIZE = 80
-    TITLE_FONT_SIZE = 80
-    SUBTITLE_FONT_SIZE = 46
+    TITLE_FONT_SIZE = 74
+    SUBTITLE_FONT_SIZE = 44
     BORDER_WIDTH = 6
     SHADOW_X = 3
     SHADOW_Y = 3
@@ -191,7 +191,8 @@ class OutfitService:
         for idx in range(1, 10):
             filters.append(
                 f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=increase,"
-                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1[img{idx}]"
+                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1,"
+                f"fade=t=in:st=0:d={fade_in}[img{idx}]"
             )
 
         # Overlay tiles
@@ -201,10 +202,6 @@ class OutfitService:
             next_label = f"ov{i}"
             filters.append(f"[{prev}][img{i}]overlay={x}:{y}:shortest=1[{next_label}]")
             prev = next_label
-
-        # Fade in the collage base (but not the heading text)
-        filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_base]")
-        prev = "faded_base"
 
         # Titles
         font_path = Config.TIKTOK_SANS_SEMIBOLD
