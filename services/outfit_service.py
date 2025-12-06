@@ -7,6 +7,7 @@ import tempfile
 import uuid
 import logging
 import random
+import textwrap
 from typing import List, Tuple, Dict
 
 from config import Config
@@ -30,8 +31,8 @@ class OutfitService:
     TILE_Y = [435, 891, 1361]
     LABEL_OFFSET_Y = -70
     LABEL_FONT_SIZE = 80
-    TITLE_FONT_SIZE = 74
-    SUBTITLE_FONT_SIZE = 44
+    TITLE_FONT_SIZE_DEFAULT = 74
+    SUBTITLE_FONT_SIZE_DEFAULT = 44
     BORDER_WIDTH = 6
     SHADOW_X = 3
     SHADOW_Y = 3
@@ -66,9 +67,32 @@ class OutfitService:
 
             total_input_size = sum(os.path.getsize(p) for p in image_paths)
 
+            # Font sizes (overridable)
+            title_font_size = request.title_font_size or self.TITLE_FONT_SIZE_DEFAULT
+            subtitle_font_size = request.subtitle_font_size or self.SUBTITLE_FONT_SIZE_DEFAULT
+
+            # Wrap text to avoid clipping; returns wrapped string and line counts
+            wrapped_title, title_lines = self._wrap_text(
+                request.main_title,
+                font_size=title_font_size,
+                max_width_px=self.CANVAS_WIDTH - 160
+            )
+            wrapped_subtitle, subtitle_lines = self._wrap_text(
+                request.subtitle or "",
+                font_size=subtitle_font_size,
+                max_width_px=self.CANVAS_WIDTH - 160
+            )
+
+            # Vertical offsets: push header upward if it wraps (avoids pushing body down)
+            wrap_offset = max(0, title_lines - 1) * title_font_size * 0.55
+            wrap_offset += max(0, subtitle_lines - 1) * subtitle_font_size * 0.50
+
+            title_y = 170 - wrap_offset
+            subtitle_y = 285 - wrap_offset
+
             # Prepare text files for main and subtitle to avoid escaping issues
-            main_title_file = self._write_text_file(request.main_title, text_files)
-            subtitle_file = self._write_text_file(request.subtitle or "", text_files)
+            main_title_file = self._write_text_file(wrapped_title, text_files)
+            subtitle_file = self._write_text_file(wrapped_subtitle, text_files)
 
             fade_in = (
                 request.fade_in
@@ -79,7 +103,11 @@ class OutfitService:
             filter_complex = self._build_filter(
                 main_title_file=main_title_file,
                 subtitle_file=subtitle_file,
-                fade_in=fade_in
+                fade_in=fade_in,
+                title_font_size=title_font_size,
+                subtitle_font_size=subtitle_font_size,
+                title_y=title_y,
+                subtitle_y=subtitle_y
             )
 
             # Build FFmpeg command
@@ -179,7 +207,11 @@ class OutfitService:
         self,
         main_title_file: str,
         subtitle_file: str,
-        fade_in: float
+        fade_in: float,
+        title_font_size: int,
+        subtitle_font_size: int,
+        title_y: float,
+        subtitle_y: float
     ) -> str:
         """Build filter_complex string for layout, text, and fade."""
         filters: List[str] = []
@@ -210,17 +242,17 @@ class OutfitService:
         font_path = Config.TIKTOK_SANS_SEMIBOLD
         filters.append(
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{main_title_file}':"
-            f"fontsize={self.TITLE_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
+            f"fontsize={title_font_size}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
             f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-            f"x=(w-text_w)/2:y=170[txt_main]"
+            f"x=(w-text_w)/2:y={title_y}[txt_main]"
         )
         prev = "txt_main"
 
         filters.append(
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{subtitle_file}':"
-            f"fontsize={self.SUBTITLE_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
+            f"fontsize={subtitle_font_size}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
             f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-            f"x=(w-text_w)/2:y=285[txt_sub]"
+            f"x=(w-text_w)/2:y={subtitle_y}[txt_sub]"
         )
         prev = "txt_sub"
 

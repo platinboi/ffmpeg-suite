@@ -252,6 +252,8 @@ class OutfitRequest(BaseModel):
     image_urls: List[HttpUrl] = Field(..., min_length=9, max_length=9)
     main_title: str = Field("Choose your outfit:", min_length=1, max_length=200)
     subtitle: str = Field("shop in bio", min_length=0, max_length=200)
+    title_font_size: Optional[int] = Field(None, ge=40, le=120)
+    subtitle_font_size: Optional[int] = Field(None, ge=30, le=110)
     duration: float = Field(DEFAULT_OUTFIT_DURATION, ge=MIN_OUTFIT_DURATION, le=MAX_OUTFIT_DURATION)
     fade_in: Optional[float] = Field(DEFAULT_OUTFIT_FADE_IN, ge=MIN_OUTFIT_FADE_IN, le=MAX_OUTFIT_FADE_IN)
     response_format: Optional[Literal["binary", "url"]] = "url"
