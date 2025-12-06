@@ -157,6 +157,20 @@ class OutfitService:
                 except Exception as e:
                     logger.warning("Failed to cleanup text temp file %s: %s", path, e)
 
+    def _wrap_text(self, text: str, font_size: int, max_width_px: int) -> Tuple[str, int]:
+        """
+        Wrap text based on an approximate character width so long headings don't clip.
+        Returns the wrapped text and number of lines.
+        """
+        if not text:
+            return "", 0
+        avg_char_px = max(font_size * 0.55, 1)
+        max_chars = max(1, int(max_width_px / avg_char_px))
+        lines = textwrap.wrap(text, width=max_chars)
+        if not lines:
+            return "", 0
+        return "\n".join(lines), len(lines)
+
     def _write_text_file(self, content: str, registry: List[str]) -> str:
         """Create a temp text file and register for cleanup."""
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8")
