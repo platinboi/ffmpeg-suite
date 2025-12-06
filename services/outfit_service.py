@@ -89,7 +89,7 @@ class OutfitService:
             # - Push subtitle slightly downward when title wraps to avoid overlap
             extra_title_lines = max(0, title_lines - 1)
             title_up = extra_title_lines * title_font_size * 0.65
-            subtitle_down = extra_title_lines * title_font_size * 0.25
+            subtitle_down = extra_title_lines * title_font_size * 0.15
 
             title_y = 170 - title_up
             subtitle_y = 300 + subtitle_down
@@ -270,7 +270,7 @@ class OutfitService:
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{subtitle_file}':"
             f"fontsize={subtitle_font_size}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
             f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-            f"text_align=center:x=(w-text_w)/2:y={subtitle_y}[txt_sub]"
+            f"text_align=center:x=(w-text_w)/2:y={subtitle_y}:enable='gte(t,0.6)'[txt_sub]"
         )
         prev = "txt_sub"
 
