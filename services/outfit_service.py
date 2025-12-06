@@ -221,6 +221,7 @@ class OutfitService:
             "-metadata", "major_brand=qt",
             "-metadata", "minor_version=0",
             "-metadata", "compatible_brands=qt  ",
+            "-brand", "qt  ",
             "-metadata", "com.apple.quicktime.make=Apple",
             "-metadata", "com.apple.quicktime.model=iPhone 17 Pro",
             "-metadata", "com.apple.quicktime.software=iOS 17.2.1",
@@ -229,7 +230,7 @@ class OutfitService:
             "-metadata", "com.apple.quicktime.location.name=New York, NY, USA",
             "-metadata", "location=+40.7128-074.0060+000.00/",
             "-metadata:s:v:0", "handler_name=Core Media Video",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",
             "-an",
             output_path
         ])
