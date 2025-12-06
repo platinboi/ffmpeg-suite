@@ -218,10 +218,9 @@ class OutfitService:
             # Clean and spoof lightweight Apple/iPhone metadata (New York, USA)
             "-map_metadata", "-1",
             "-map_chapters", "-1",
-            "-metadata", "major_brand=qt",
+            "-metadata", "major_brand=mp42",
             "-metadata", "minor_version=0",
-            "-metadata", "compatible_brands=qt  ",
-            "-brand", "qt  ",
+            "-metadata", "compatible_brands=mp42isom",
             "-metadata", "com.apple.quicktime.make=Apple",
             "-metadata", "com.apple.quicktime.model=iPhone 17 Pro",
             "-metadata", "com.apple.quicktime.software=iOS 17.2.1",
