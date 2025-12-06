@@ -89,7 +89,7 @@ class OutfitService:
             # - Push subtitle slightly downward when title wraps to avoid overlap
             extra_title_lines = max(0, title_lines - 1)
             title_up = extra_title_lines * title_font_size * 0.65
-            subtitle_down = extra_title_lines * title_font_size * 0.15
+            subtitle_down = extra_title_lines * title_font_size * 0.10
 
             title_y = 170 - title_up
             subtitle_y = 300 + subtitle_down
