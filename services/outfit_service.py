@@ -32,7 +32,7 @@ class OutfitService:
     LABEL_OFFSET_Y = -70
     LABEL_FONT_SIZE = 80
     TITLE_FONT_SIZE_DEFAULT = 74
-    SUBTITLE_FONT_SIZE_DEFAULT = 44
+    SUBTITLE_FONT_SIZE_DEFAULT = 40
     BORDER_WIDTH = 6
     SHADOW_X = 3
     SHADOW_Y = 3
@@ -83,12 +83,15 @@ class OutfitService:
                 max_width_px=self.CANVAS_WIDTH - 160
             )
 
-            # Vertical offsets: push header upward if it wraps (avoids pushing body down)
-            wrap_offset = max(0, title_lines - 1) * title_font_size * 0.55
-            wrap_offset += max(0, subtitle_lines - 1) * subtitle_font_size * 0.50
+            # Vertical offsets:
+            # - Push title upward when it wraps
+            # - Push subtitle slightly downward when title wraps to avoid overlap
+            extra_title_lines = max(0, title_lines - 1)
+            title_up = extra_title_lines * title_font_size * 0.80
+            subtitle_down = extra_title_lines * title_font_size * 0.50
 
-            title_y = 170 - wrap_offset
-            subtitle_y = 285 - wrap_offset
+            title_y = 170 - title_up
+            subtitle_y = 300 + subtitle_down
 
             # Prepare text files for main and subtitle to avoid escaping issues
             main_title_file = self._write_text_file(wrapped_title, text_files)
