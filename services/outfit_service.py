@@ -68,7 +68,8 @@ class OutfitService:
             total_input_size = sum(os.path.getsize(p) for p in image_paths)
 
             # Font sizes (overridable)
-            title_font_size = request.title_font_size or self.TITLE_FONT_SIZE_DEFAULT
+            requested_title_font_size = request.title_font_size or self.TITLE_FONT_SIZE_DEFAULT
+            title_font_size = int(round(requested_title_font_size * 0.92))
             subtitle_font_size = request.subtitle_font_size or self.SUBTITLE_FONT_SIZE_DEFAULT
 
             # Wrap text to avoid clipping; returns wrapped string and line counts
