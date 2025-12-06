@@ -8,6 +8,8 @@ import uuid
 import logging
 import random
 import textwrap
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Tuple, Dict
 
 from config import Config
@@ -89,7 +91,7 @@ class OutfitService:
             # - Push subtitle slightly downward when title wraps to avoid overlap
             extra_title_lines = max(0, title_lines - 1)
             title_up = extra_title_lines * title_font_size * 0.65
-            subtitle_down = extra_title_lines * title_font_size * 0.10
+            subtitle_down = extra_title_lines * title_font_size * 0.05
 
             title_y = 170 - title_up
             subtitle_y = 300 + subtitle_down
@@ -114,12 +116,15 @@ class OutfitService:
                 subtitle_y=subtitle_y
             )
 
+            creation_time = datetime.now(ZoneInfo("America/New_York")).isoformat(timespec="seconds")
+
             # Build FFmpeg command
             cmd = self._build_ffmpeg_command(
                 filter_complex=filter_complex,
                 image_paths=image_paths,
                 duration=request.duration,
-                output_path=output_path
+                output_path=output_path,
+                creation_time=creation_time
             )
 
             logger.info("Running outfit FFmpeg command")
@@ -189,7 +194,8 @@ class OutfitService:
         filter_complex: str,
         image_paths: List[str],
         duration: float,
-        output_path: str
+        output_path: str,
+        creation_time: str
     ) -> List[str]:
         """Construct the ffmpeg command."""
         cmd: List[str] = [
@@ -224,7 +230,7 @@ class OutfitService:
             "-metadata", "com.apple.quicktime.make=Apple",
             "-metadata", "com.apple.quicktime.model=iPhone 17 Pro",
             "-metadata", "com.apple.quicktime.software=iOS 17.2.1",
-            "-metadata", "creation_time=2025-01-05T12:34:56-05:00",
+            "-metadata", f"creation_time={creation_time}",
             "-metadata", "com.apple.quicktime.location.ISO6709=+40.7128-074.0060+000.00/",
             "-metadata", "com.apple.quicktime.location.name=New York, NY, USA",
             "-metadata", "location=+40.7128-074.0060+000.00/",
