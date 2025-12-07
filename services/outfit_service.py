@@ -278,7 +278,7 @@ class OutfitService:
         early_gamma = 0.78  # gentle dimming during the first 0.7s to slow the lift
         filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
         filters.append(
-            f"[faded_body]colorlevels=gamma={early_gamma}:enable='between(t,0,{slow_ramp_until})'[leveled_body]"
+            f"[faded_body]eq=gamma={early_gamma}:enable='between(t,0,{slow_ramp_until})'[leveled_body]"
         )
         prev = "leveled_body"
 
