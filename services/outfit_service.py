@@ -254,14 +254,25 @@ class OutfitService:
         """Build filter_complex string for layout, text, and fade."""
         filters: List[str] = []
 
+        # Staggered fade timing
+        base_fade = round(fade_in + 0.2, 3)  # keep the overall blackout a touch longer
+        top_row_delay = 0.3                  # nothing above the bottom row for the first 0.3s
+        top_row_fade = round(fade_in + 0.25, 3)  # slightly longer fade for upper rows
+        bottom_row_fade = round(max(fade_in * 0.9, fade_in - 0.15), 3)  # subtly faster bottom row
+        label_fade = 0.45
+        top_row_indices = {1, 2, 3, 4, 5, 6}
+
         # Base video from color source
-        filters.append("[0:v]format=rgba[base0]")
+        filters.append(f"[0:v]format=rgba,fade=t=in:st=0:d={base_fade}[base0]")
 
         # Prepare scaled inputs
         for idx in range(1, 10):
+            row_start = top_row_delay if idx in top_row_indices else 0.0
+            row_fade = top_row_fade if idx in top_row_indices else bottom_row_fade
             filters.append(
                 f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=increase,"
-                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1[img{idx}]"
+                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1,format=rgba,"
+                f"fade=t=in:st={row_start}:d={row_fade}:alpha=1[img{idx}]"
             )
 
         # Overlay tiles
@@ -272,9 +283,7 @@ class OutfitService:
             filters.append(f"[{prev}][img{i}]overlay={x}:{y}:shortest=1[{next_label}]")
             prev = next_label
 
-        # Fade body (images + labels) before adding always-visible header text
-        filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
-        prev = "faded_body"
+        # Body ready for titles (row-level fades already applied)
 
         # Titles (do NOT fade)
         font_path = Config.TIKTOK_SANS_SEMIBOLD
@@ -299,10 +308,16 @@ class OutfitService:
         label_positions = self._label_positions()
         for i, ((x, y), text) in enumerate(zip(label_positions, label_texts)):
             next_label = f"label{i}"
+            label_start = top_row_delay if i < 6 else 0.0
+            label_alpha_expr = (
+                f"if(lt(t,{label_start}),0,if(lt(t,{label_start + label_fade}),"
+                f"(t-{label_start})/{label_fade},1))"
+            )
             filters.append(
                 f"[{prev}]drawtext=fontfile='{font_path}':text='{text}':"
                 f"fontsize={self.LABEL_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
                 f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
+                f"alpha='{label_alpha_expr}':"
                 f"x={x}-text_w/2:y={y}[{next_label}]"
             )
             prev = next_label
