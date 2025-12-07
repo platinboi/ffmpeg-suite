@@ -274,8 +274,8 @@ class OutfitService:
             prev = next_label
 
         # Fade body (images + labels) before adding always-visible header text
-        slow_ramp_until = 0.7
-        early_gamma = 0.78  # gentle dimming during the first 0.7s to slow the lift
+        slow_ramp_until = 0.9
+        early_gamma = 0.75  # gentle dimming during the first 0.9s to slow the lift
         filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
         filters.append(
             f"[faded_body]eq=gamma={early_gamma}:enable='between(t,0,{slow_ramp_until})'[leveled_body]"
