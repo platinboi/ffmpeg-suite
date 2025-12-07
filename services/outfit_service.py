@@ -100,11 +100,12 @@ class OutfitService:
             main_title_file = self._write_text_file(wrapped_title, text_files)
             subtitle_file = self._write_text_file(wrapped_subtitle, text_files)
 
-            fade_in = (
+            fade_in_requested = (
                 request.fade_in
                 if request.fade_in is not None
                 else random.uniform(MIN_OUTFIT_FADE_IN, MAX_OUTFIT_FADE_IN)
             )
+            fade_in = max(MIN_OUTFIT_FADE_IN, min(fade_in_requested, MAX_OUTFIT_FADE_IN))
 
             filter_complex = self._build_filter(
                 main_title_file=main_title_file,
@@ -273,8 +274,13 @@ class OutfitService:
             prev = next_label
 
         # Fade body (images + labels) before adding always-visible header text
+        slow_ramp_until = 0.7
+        early_gamma = 0.78  # gentle dimming during the first 0.7s to slow the lift
         filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
-        prev = "faded_body"
+        filters.append(
+            f"[faded_body]colorlevels=gamma={early_gamma}:enable='between(t,0,{slow_ramp_until})'[leveled_body]"
+        )
+        prev = "leveled_body"
 
         # Titles (do NOT fade)
         font_path = Config.TIKTOK_SANS_SEMIBOLD
