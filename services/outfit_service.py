@@ -94,7 +94,7 @@ class OutfitService:
             subtitle_down = extra_title_lines * title_font_size * 0.05
 
             title_y = 170 - title_up
-            subtitle_y = 300 + subtitle_down
+            subtitle_y = 285 + subtitle_down
 
             # Prepare text files for main and subtitle to avoid escaping issues
             main_title_file = self._write_text_file(wrapped_title, text_files)
