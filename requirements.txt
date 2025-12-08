@@ -29,3 +29,4 @@ Pillow==10.4.0
 
 # Background removal
 rembg==2.0.69
+onnxruntime==1.16.3
