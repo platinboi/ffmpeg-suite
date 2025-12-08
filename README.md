@@ -1,155 +1,132 @@
-# FFmpeg Text Overlay API
+# FFmpeg Suite API
 
-A production-ready FastAPI service for adding customizable text overlays to images and videos using FFmpeg. Designed for Railway deployment with Cloudflare R2 integration.
+A production-ready FastAPI service for video/image processing. Includes text overlays, collage generation, and AI background removal.
 
-## Features
+**Base URL**: `https://ffmpeg-suite-production.up.railway.app`
 
-- **URL-First Design**: Process files directly from Cloudflare R2 or any public URL
-- **File Upload Support**: Backup option for direct file uploads
-- **Style Templates**: Predefined text styles (default, bold, minimal, cinematic)
-- **Full Customization**: Override any style parameter (font, size, colors, position, effects)
-- **Inter Font**: Professional typography with Regular and Bold weights
-- **Auto Cleanup**: Automatic temporary file management
-- **Railway Ready**: One-click deployment with Docker
-- **R2 Integration**: Optional Cloudflare R2 upload support
+## Authentication
 
-## Quick Start
+All endpoints (except `/health`, `/docs`, `/templates`) require an API key:
 
-### Local Development
-
-1. **Install FFmpeg**:
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
-
-# Check installation
-ffmpeg -version
+```
+X-API-Key: your_api_key_here
 ```
 
-2. **Clone and Setup**:
-```bash
-cd ffmpeg-scripts
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+Or use Bearer token:
+```
+Authorization: Bearer your_api_key_here
 ```
 
-3. **Download Inter Font** (if not using Docker):
-   - Download from: https://github.com/rsms/inter/releases
-   - Extract and place `Inter-Regular.ttf` and `Inter-Bold.ttf` in `fonts/` directory
+---
 
-4. **Run Locally**:
-```bash
-python main.py
-# or
-uvicorn main:app --reload --port 8000
+## Endpoints Reference
+
+### 1. Health Check
+
+**GET /health**
+
+Check if the service is running and dependencies are available.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "ffmpeg_available": true,
+  "fonts_available": true,
+  "version": "1.0.0"
+}
 ```
 
-5. **Test the API**:
+---
+
+### 2. Background Removal
+
+**POST /rembg**
+
+Remove the background from an image using AI. Returns a transparent PNG.
+
+**Request Body:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `image_url` | string | *required* | URL of the image to process |
+| `response_format` | string | `"url"` | `"url"` returns R2 link, `"binary"` returns file |
+| `folder` | string | `"rembg"` | R2 folder for storage (alphanumeric, hyphens, underscores) |
+| `model` | string | `"u2net"` | AI model to use (see models below) |
+| `alpha_matting` | boolean | `false` | Enable edge refinement for cleaner cutouts |
+| `foreground_threshold` | integer | `240` | 0-255. Pixels with alpha above this are kept as foreground |
+| `background_threshold` | integer | `10` | 0-255. Pixels with alpha below this are removed as background |
+| `erode_size` | integer | `10` | 0-50. Amount of edge erosion applied during alpha matting |
+| `post_process_mask` | boolean | `false` | Apply smoothing to the segmentation mask edges |
+| `bgcolor` | array | `null` | RGBA array like `[255,255,255,255]` to replace transparency with solid color. Leave null for transparent output. |
+
+**Available Models** (from [rembg](https://github.com/danielgatis/rembg)):
+
+| Model | Description | Best For |
+|-------|-------------|----------|
+| `u2net` | General purpose model (~170MB) | Default, works well for most cases |
+| `u2netp` | Lightweight u2net variant | Faster processing, slightly lower quality |
+| `u2net_human_seg` | Trained for human segmentation | People, portraits |
+| `u2net_cloth_seg` | Clothing parser | Separating clothing from background |
+| `silueta` | Compressed u2net (~43MB) | Memory-constrained environments |
+| `isnet-general-use` | Modern general-purpose model | Alternative to u2net, often better edges |
+| `isnet-anime` | Anime character segmentation | Anime, cartoon, illustrated content |
+| `birefnet-general` | High quality BiRefNet model | Best quality, slower |
+| `birefnet-general-lite` | Lightweight BiRefNet | Balance of quality and speed |
+| `birefnet-portrait` | Portrait-optimized BiRefNet | Human portraits, headshots |
+| `birefnet-massive` | Trained on massive dataset | Complex scenes |
+
+**Example Request:**
 ```bash
-# Visit the interactive docs
-open http://localhost:8000/docs
-```
-
-## API Endpoints
-
-### 1. Process from URL (Primary)
-
-**Endpoint**: `POST /overlay/url`
-
-Process files hosted on Cloudflare R2 or any public URL.
-
-```bash
-curl -X POST "http://localhost:8000/overlay/url" \
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/rembg" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your_key" \
   -d '{
-    "url": "https://your-bucket.r2.dev/video.mp4",
-    "text": "Hello World",
-    "template": "default"
-  }' \
-  --output result.mp4
+    "image_url": "https://example.com/image.jpg",
+    "response_format": "url",
+    "folder": "product_images",
+    "model": "isnet-general-use",
+    "alpha_matting": true
+  }'
 ```
 
-**Request Body**:
+**Response:**
 ```json
 {
-  "url": "https://your-bucket.r2.dev/video.mp4",
-  "text": "Your Text Here",
-  "template": "bold",
-  "output_format": "same",
-  "overrides": {
-    "font_size": 64,
-    "text_color": "#FFFFFF",
-    "border_width": 3,
-    "position": "bottom-center"
-  }
+  "status": "success",
+  "message": "Background removed successfully",
+  "filename": "rembg_abc123.png",
+  "download_url": "https://storage.example.com/product_images/rembg_abc123.png",
+  "processing_time": 2.5
 }
 ```
 
-### 2. Process from Upload (Backup)
+---
 
-**Endpoint**: `POST /overlay/upload`
+### 3. Outfit Collage Video
 
-Upload files directly when they're not hosted on a CDN.
+**POST /outfit**
 
+Generate a 9:16 video with 9 product images in a 3x3 grid layout, with title and subtitle text.
+
+**Request Body:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `image_urls` | array | *required* | Exactly 9 image URLs (JPG/PNG) |
+| `main_title` | string | `"Choose your outfit:"` | Title text at top (1-200 chars) |
+| `subtitle` | string | `"shop in bio"` | Subtitle text (0-200 chars) |
+| `title_font_size` | integer | `74` | Title font size (40-120) |
+| `subtitle_font_size` | integer | `40` | Subtitle font size (30-110) |
+| `duration` | float | `6.0` | Video duration in seconds (5.0-7.0) |
+| `fade_in` | float | `null` | Fade-in duration (2.5-3.0). If null, randomized within range |
+| `response_format` | string | `"url"` | `"url"` or `"binary"` |
+
+**Example Request:**
 ```bash
-curl -X POST "http://localhost:8000/overlay/upload" \
-  -F "file=@video.mp4" \
-  -F "text=Hello World" \
-  -F "template=cinematic" \
-  --output result.mp4
-```
-
-**With Overrides**:
-```bash
-curl -X POST "http://localhost:8000/overlay/upload" \
-  -F "file=@image.jpg" \
-  -F "text=Custom Text" \
-  -F "template=default" \
-  -F 'overrides={"font_size": 72, "text_color": "yellow", "position": "top-center"}' \
-  --output result.jpg
-```
-
-### 3. List Templates
-
-**Endpoint**: `GET /templates`
-
-```bash
-curl http://localhost:8000/templates
-```
-
-**Response**:
-```json
-{
-  "templates": {
-    "default": {
-      "font_size": 48,
-      "text_color": "white",
-      "border_width": 2,
-      "position": "center",
-      ...
-    },
-    "bold": { ... },
-    "minimal": { ... },
-    "cinematic": { ... }
-  },
-  "count": 4
-}
-```
-
-### 5. Outfit Collage (New)
-
-**Endpoint**: `POST /outfit`
-
-Generate a 5–7 second 9:16 video using 9 square product images laid out exactly like `OUTFIT-EXAMPLE.jpg`, with configurable title and subtitle. Default duration is 5s with 1.5s fade-in from black. Text style uses white with black outline/shadow (same as example).
-
-```bash
-curl -X POST "http://localhost:8000/outfit" \
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/outfit" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: <your-key>" \
+  -H "X-API-Key: your_key" \
   -d '{
     "image_urls": [
       "https://example.com/img1.jpg",
@@ -164,364 +141,307 @@ curl -X POST "http://localhost:8000/outfit" \
     ],
     "main_title": "Choose your school outfit:",
     "subtitle": "(shop in bio)",
-    "duration": 5,
-    "fade_in": 1.5,
+    "duration": 6,
     "response_format": "url"
   }'
 ```
 
-**Key parameters**
-- `image_urls` (required): exactly 9 image URLs (JPG/PNG)
-- `main_title` / `subtitle`: text shown at the top
-- `duration`: 5–7 seconds (default 5)
-- `fade_in`: 1.5–2 seconds (default 1.5)
-- `response_format`: `url` (uploads to R2 `outfits/`) or `binary`
-
-**Response**:
+**Response:**
 ```json
 {
   "status": "success",
   "message": "Outfit video created successfully",
-  "filename": "outfit_<uuid>.mp4",
-  "download_url": "https://<bucket>.r2.dev/outfits/outfit_<uuid>.mp4",
-  "processing_time": 1.8
+  "filename": "outfit_abc123.mp4",
+  "download_url": "https://storage.example.com/outfits/outfit_abc123.mp4",
+  "processing_time": 8.5
 }
 ```
 
-### 6. POV Collage (New)
+---
 
-**Endpoint**: `POST /pov`
+### 4. POV Collage Video
 
-Generate a 5–7 second 9:16 video using 8 square images laid out exactly like `POV-TEMPLATE2.jpg`, with a black header/title, centered subtitle, and intentional overlaps. Defaults mirror the outfits flow (duration 6s with randomized 2.5–3s fade-in, URL response uploads to `pov/` in R2 when enabled).
+**POST /pov**
 
+Generate a 9:16 video with 8 images in a specific "POV" layout with overlapping elements.
+
+**Request Body:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `images` | object | *required* | Object with 8 named image slots (see below) |
+| `main_title` | string | `"POV: me and the boys..."` | Title in black header (1-200 chars) |
+| `subtitle` | string | `"(clothes in bio)"` | Subtitle on white body (0-200 chars) |
+| `title_font_size` | integer | `66` | Title font size (48-120) |
+| `subtitle_font_size` | integer | `38` | Subtitle font size (26-90) |
+| `duration` | float | `6.0` | Video duration in seconds (5.0-7.0) |
+| `fade_in` | float | `null` | Fade-in duration (2.5-3.0). If null, randomized |
+| `response_format` | string | `"url"` | `"url"` or `"binary"` |
+
+**Required Image Slots:**
+
+| Slot | Position | Description |
+|------|----------|-------------|
+| `cap` | Top-left | Hat/cap image |
+| `flag` | Upper-middle | Flag or banner |
+| `landscape` | Large right | Main landscape/scene |
+| `shirt` | Mid-left | Shirt/top |
+| `watch` | Center overlay | Watch/accessory |
+| `pants` | Lower-left | Pants/bottoms |
+| `shoes` | Over pants | Footwear |
+| `car` | Lower-right | Vehicle/transport |
+
+**Example Request:**
 ```bash
-curl -X POST "http://localhost:8000/pov" \
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/pov" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: <your-key>" \
+  -H "X-API-Key: your_key" \
   -d '{
-    "image_urls": [
-      "https://example.com/cap.jpg",        # cap (top-left)
-      "https://example.com/flag.jpg",       # flag (upper mid)
-      "https://example.com/landscape.jpg",  # landscape (large right)
-      "https://example.com/shirt.jpg",      # shirt (mid-left)
-      "https://example.com/watch.jpg",      # watch (on top of shirt/landscape)
-      "https://example.com/pants.jpg",      # pants (lower-left)
-      "https://example.com/shoes.jpg",      # shoes (over pants)
-      "https://example.com/car.jpg"         # car (lower-right)
-    ],
-    "main_title": "POV: me and the boys after doing something that is in the title",
-    "subtitle": "(clothes in bio)",
-    "duration": 6,
-    "fade_in": null,
+    "images": {
+      "cap": "https://example.com/cap.jpg",
+      "flag": "https://example.com/flag.jpg",
+      "landscape": "https://example.com/landscape.jpg",
+      "shirt": "https://example.com/shirt.jpg",
+      "watch": "https://example.com/watch.jpg",
+      "pants": "https://example.com/pants.jpg",
+      "shoes": "https://example.com/shoes.jpg",
+      "car": "https://example.com/car.jpg"
+    },
+    "main_title": "POV: weekend vibes",
+    "subtitle": "(shop in bio)",
     "response_format": "url"
   }'
 ```
 
-**Key parameters**
-- `image_urls` (required): exactly 8 URLs in the order shown above.
-- `main_title` / `subtitle`: title in black header, subtitle centered on white body.
-- `duration`: 5–7 seconds (default 6, jittered ±0.75s).
-- `fade_in`: 2.5–3 seconds (default randomized when null).
-- `response_format`: `url` (uploads to R2 `pov/`) or `binary`.
+---
 
-**Response**:
-```json
-{
-  "status": "success",
-  "message": "POV video created successfully",
-  "filename": "pov_<uuid>.mp4",
-  "download_url": "https://<bucket>.r2.dev/pov/pov_<uuid>.mp4",
-  "processing_time": 1.9
-}
-```
+### 5. Text Overlay from URL
 
-### 4. Health Check
+**POST /overlay/url**
 
-**Endpoint**: `GET /health`
+Add text overlay to an image or video from a URL.
 
+**Request Body:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `url` | string | *required* | URL of image/video to process |
+| `text` | string | *required* | Text to overlay (1-500 chars) |
+| `template` | string | `"default"` | Template name to use |
+| `overrides` | object | `null` | Override specific style settings (see below) |
+| `output_format` | string | `"same"` | `"same"`, `"mp4"`, `"jpg"`, or `"png"` |
+| `response_format` | string | `"binary"` | `"url"` or `"binary"` |
+
+**Override Options:**
+
+| Parameter | Type | Range | Description |
+|-----------|------|-------|-------------|
+| `font_size` | integer | 12-200 | Text size in pixels |
+| `font_weight` | integer | 100-900 | Font weight (400=regular, 700=bold) |
+| `text_color` | string | - | Hex (`#FFFFFF`) or named color |
+| `border_width` | integer | 0-10 | Text outline width |
+| `border_color` | string | - | Outline color |
+| `shadow_x` | integer | -20 to 20 | Shadow horizontal offset |
+| `shadow_y` | integer | -20 to 20 | Shadow vertical offset |
+| `shadow_color` | string | - | Shadow color |
+| `background_enabled` | boolean | - | Show background box behind text |
+| `background_color` | string | - | Background box color |
+| `background_opacity` | float | 0.0-1.0 | Background transparency |
+| `text_opacity` | float | 0.0-1.0 | Text transparency |
+| `position` | string | - | Text position (see positions below) |
+| `custom_x` | integer | 0+ | X coordinate for custom position |
+| `custom_y` | integer | 0+ | Y coordinate for custom position |
+| `alignment` | string | - | `"left"`, `"center"`, or `"right"` |
+| `max_text_width_percent` | integer | 10-100 | Max text width as % of frame |
+| `line_spacing` | integer | -50 to 50 | Space between lines (negative = tighter) |
+
+**Position Options:**
+`center`, `top-left`, `top-right`, `top-center`, `bottom-left`, `bottom-right`, `bottom-center`, `middle-left`, `middle-right`, `custom`
+
+**Named Colors:**
+`white`, `black`, `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, `orange`, `purple`, `pink`, `gray`
+
+**Example Request:**
 ```bash
-curl http://localhost:8000/health
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/overlay/url" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_key" \
+  -d '{
+    "url": "https://example.com/video.mp4",
+    "text": "Amazing Content",
+    "template": "default",
+    "overrides": {
+      "font_size": 64,
+      "text_color": "#FFFFFF",
+      "position": "bottom-center"
+    },
+    "response_format": "url"
+  }'
 ```
 
-## Style Templates
+---
 
-### Default
-- **Font**: Inter Regular, 48px
-- **Colors**: White text, black border (2px)
-- **Position**: Center
-- **Effects**: Shadow, semi-transparent background
+### 6. Text Overlay from Upload
 
-### Bold
-- **Font**: Inter Bold, 56px
-- **Colors**: White text, black border (3px)
-- **Position**: Center
-- **Effects**: Stronger shadow, darker background
+**POST /overlay/upload**
 
-### Minimal
-- **Font**: Inter Regular, 40px
-- **Colors**: White text, no border
-- **Position**: Center
-- **Effects**: Light shadow only
+Add text overlay to an uploaded image or video file.
 
-### Cinematic
-- **Font**: Inter Bold, 64px
-- **Colors**: White text, black border (3px)
-- **Position**: Bottom center
-- **Effects**: Strong shadow, dark background
+**Form Data:**
 
-## Customization Options
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `file` | file | *required* | Image or video file |
+| `text` | string | *required* | Text to overlay (1-500 chars) |
+| `template` | string | `"default"` | Template name |
+| `overrides` | string | `null` | JSON string of override options |
+| `output_format` | string | `"same"` | Output format |
+| `response_format` | string | `"binary"` | `"url"` or `"binary"` |
 
-### Override Parameters
-
-```json
-{
-  "overrides": {
-    "font_family": "bold",              // "regular" | "bold"
-    "font_size": 64,                    // 12-200
-    "text_color": "#FFFFFF",            // hex or named
-    "border_width": 3,                  // 0-10
-    "border_color": "black",
-    "shadow_x": 5,                      // -20 to 20
-    "shadow_y": 5,                      // -20 to 20
-    "shadow_color": "black",
-    "background_enabled": true,
-    "background_color": "black",
-    "background_opacity": 0.5,          // 0.0-1.0
-    "text_opacity": 1.0,                // 0.0-1.0
-    "position": "center",               // see positions below
-    "custom_x": 100,                    // for "custom" position
-    "custom_y": 100,                    // for "custom" position
-    "alignment": "center"               // "left" | "center" | "right"
-  }
-}
-```
-
-### Position Options
-
-- `center` - Centered in frame
-- `top-left` - Top left corner (10px padding)
-- `top-right` - Top right corner
-- `top-center` - Top center
-- `bottom-left` - Bottom left corner
-- `bottom-right` - Bottom right corner
-- `bottom-center` - Bottom center
-- `middle-left` - Middle left edge
-- `middle-right` - Middle right edge
-- `custom` - Use custom_x and custom_y coordinates
-
-### Supported Colors
-
-**Named Colors**: white, black, red, green, blue, yellow, cyan, magenta, orange, purple, pink, gray
-
-**Hex Colors**: `#FF0000`, `#00FF00`, etc.
-
-## Python Client Example
-
-```python
-import requests
-
-# Process from URL
-response = requests.post(
-    "https://your-api.railway.app/overlay/url",
-    json={
-        "url": "https://your-bucket.r2.dev/video.mp4",
-        "text": "Amazing Video",
-        "template": "cinematic",
-        "overrides": {
-            "font_size": 72,
-            "text_color": "#FFD700",
-            "position": "bottom-center"
-        }
-    }
-)
-
-# Save result
-with open("output.mp4", "wb") as f:
-    f.write(response.content)
-```
-
-## JavaScript/TypeScript Example
-
-```typescript
-// Process from URL
-const response = await fetch('https://your-api.railway.app/overlay/url', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    url: 'https://your-bucket.r2.dev/video.mp4',
-    text: 'Amazing Video',
-    template: 'cinematic',
-    overrides: {
-      font_size: 72,
-      text_color: '#FFD700',
-      position: 'bottom-center'
-    }
-  })
-});
-
-const blob = await response.blob();
-const url = URL.createObjectURL(blob);
-// Use url for download or preview
-```
-
-## Railway Deployment
-
-### One-Click Deploy
-
-1. **Push to GitHub**:
+**Example Request:**
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin <your-repo-url>
-git push -u origin main
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/overlay/upload" \
+  -H "X-API-Key: your_key" \
+  -F "file=@video.mp4" \
+  -F "text=Hello World" \
+  -F "template=default" \
+  -F 'overrides={"font_size": 72, "position": "center"}'
 ```
 
-2. **Deploy to Railway**:
-   - Go to [railway.app](https://railway.app)
-   - Click "New Project" → "Deploy from GitHub repo"
-   - Select your repository
-   - Railway auto-detects the Dockerfile and deploys
+---
 
-3. **Configure Environment** (Optional):
+### 7. Merge Clips
+
+**POST /overlay/merge**
+
+Merge 2-10 video clips with individual text overlays into a single video.
+
+**Request Body:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `clips` | array | *required* | Array of 2-10 clip configurations |
+| `output_format` | string | `"mp4"` | `"mp4"` or `"mov"` |
+| `response_format` | string | `"binary"` | `"url"` or `"binary"` |
+| `first_clip_duration` | float | `null` | Trim first clip to this duration (0-300 seconds) |
+| `first_clip_trim_mode` | string | `"both"` | `"start"`, `"end"`, or `"both"` |
+
+**Clip Configuration:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | string | Video URL |
+| `text` | string | Text overlay for this clip |
+| `template` | string | Template name |
+| `overrides` | object | Style overrides |
+
+**Example Request:**
 ```bash
-# In Railway dashboard, add environment variables:
-MAX_FILE_SIZE=104857600  # 100MB
-UPLOAD_TIMEOUT=30
+curl -X POST "https://ffmpeg-suite-production.up.railway.app/overlay/merge" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_key" \
+  -d '{
+    "clips": [
+      {"url": "https://example.com/clip1.mp4", "text": "Part 1"},
+      {"url": "https://example.com/clip2.mp4", "text": "Part 2"}
+    ],
+    "output_format": "mp4",
+    "response_format": "url"
+  }'
 ```
 
-4. **Get Your API URL**:
-   - Railway provides a public URL: `https://your-project.railway.app`
-   - Use this as your API endpoint
+---
 
-### Enable R2 Upload (Optional)
+### 8. Templates
 
-To enable automatic upload of processed files to R2:
+**GET /templates** - List all templates
 
-1. **Add to Railway Environment Variables**:
-```bash
-R2_ENABLED=true
-R2_ACCOUNT_ID=your_account_id
-R2_ACCESS_KEY_ID=your_access_key
-R2_SECRET_ACCESS_KEY=your_secret_key
-R2_BUCKET_NAME=your_bucket_name
-```
+**GET /templates/{name}** - Get specific template
 
-2. **Uncomment boto3 in requirements.txt**:
-```txt
-boto3==1.29.7
-botocore==1.32.7
-```
+**POST /templates** - Create new template
 
-3. **Redeploy** - Railway will rebuild with R2 support
+**PUT /templates/{name}** - Update template
+
+**DELETE /templates/{name}** - Delete template
+
+**POST /templates/{name}/duplicate** - Duplicate template
+
+**Template Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Template identifier (1-100 chars) |
+| `font_size` | integer | Text size (12-200) |
+| `font_weight` | integer | Font weight (100-900) |
+| `text_color` | string | Text color |
+| `border_width` | integer | Outline width (0-10) |
+| `border_color` | string | Outline color |
+| `shadow_x` | integer | Shadow X offset (-20 to 20) |
+| `shadow_y` | integer | Shadow Y offset (-20 to 20) |
+| `shadow_color` | string | Shadow color |
+| `position` | string | Text position |
+| `background_enabled` | boolean | Show background box |
+| `background_color` | string | Background color |
+| `background_opacity` | float | Background transparency (0-1) |
+| `text_opacity` | float | Text transparency (0-1) |
+| `alignment` | string | Text alignment |
+| `max_text_width_percent` | integer | Max width % (10-100) |
+| `line_spacing` | integer | Line spacing (-50 to 50) |
+
+---
 
 ## File Specifications
 
-### Supported Formats
+**Supported Input Formats:**
+- Images: JPG, JPEG, PNG
+- Videos: MP4, MOV, AVI
 
-**Images**: JPG, JPEG, PNG
-**Videos**: MP4, MOV, AVI
+**Limits:**
+- Max file size: 100MB
+- Max text length: 500 characters
+- Processing timeout: 2 minutes
 
-### Size Limits
-
-- **Max file size**: 100MB (configurable via `MAX_FILE_SIZE` env var)
-- **Download timeout**: 30 seconds (configurable via `UPLOAD_TIMEOUT`)
-- **Processing timeout**: 2 minutes per file
-
-### Output Formats
-
-- `same` - Keep original format (default)
-- `mp4` - Convert to MP4 (videos)
-- `jpg` - Convert to JPG (images)
-- `png` - Convert to PNG (images)
-
-## Architecture
-
-```
-ffmpeg-scripts/
-├── main.py                 # FastAPI application
-├── config.py              # Configuration & templates
-├── services/
-│   ├── ffmpeg_service.py  # FFmpeg processing
-│   ├── download_service.py # URL downloads
-│   └── storage_service.py # R2 integration
-├── models/
-│   └── schemas.py         # Pydantic models
-├── fonts/                 # Inter font files
-├── temp/                  # Temporary processing
-├── Dockerfile             # Docker configuration
-├── requirements.txt       # Python dependencies
-└── railway.toml          # Railway config
-```
+---
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 8000 | Server port (auto-set by Railway) |
-| `MAX_FILE_SIZE` | 104857600 | Max file size in bytes (100MB) |
-| `UPLOAD_TIMEOUT` | 30 | URL download timeout in seconds |
-| `R2_ENABLED` | false | Enable R2 storage |
+| `PORT` | `8000` | Server port |
+| `MAX_FILE_SIZE` | `104857600` | Max file size in bytes (100MB) |
+| `R2_ENABLED` | `false` | Enable Cloudflare R2 storage |
 | `R2_ACCOUNT_ID` | - | Cloudflare account ID |
 | `R2_ACCESS_KEY_ID` | - | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | - | R2 secret key |
 | `R2_BUCKET_NAME` | - | R2 bucket name |
 
-## Troubleshooting
+---
 
-### FFmpeg Not Found
-```bash
-# Ensure FFmpeg is installed
-ffmpeg -version
+## Error Responses
 
-# On Docker, it's included automatically
+All errors return:
+```json
+{
+  "status": "error",
+  "message": "Description of what went wrong"
+}
 ```
 
-### Font Issues
-```bash
-# Check font availability
-fc-list | grep Inter
-
-# Download fonts to fonts/ directory
-# Docker automatically downloads Inter font
-```
-
-### Memory Issues
-- Reduce `MAX_FILE_SIZE` for Railway's memory limits
-- Process smaller files or upgrade Railway plan
-
-### Timeout Errors
-- Increase `UPLOAD_TIMEOUT` for large files
-- Use faster storage (R2 is optimized for this)
-
-## Performance Tips
-
-1. **Use URL endpoint** - Faster than uploads, especially on Railway
-2. **Keep files on R2** - Minimize data transfer
-3. **Optimize video settings** - Use MP4 with H.264 for best compatibility
-4. **Enable R2 upload** - Return URLs instead of files for faster response
-
-## Security
-
-- Input validation with Pydantic
-- Command injection prevention
-- File type restrictions
-- Size limits
-- Non-root Docker user
-- CORS configuration (configure for production)
-
-## License
-
-MIT License - Use freely in your projects
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/ffmpeg-scripts/issues)
-- **Docs**: http://localhost:8000/docs (interactive API documentation)
-- **Railway Docs**: https://docs.railway.app
+**Common HTTP Status Codes:**
+- `400` - Bad request (invalid parameters)
+- `401` - Unauthorized (missing/invalid API key)
+- `413` - File too large
+- `500` - Server error
+- `503` - Storage not enabled
 
 ---
 
-Built with FastAPI, FFmpeg, and Inter font. Optimized for Railway deployment.
+## Rate Limits
+
+No hard rate limits, but recommended:
+- Background removal: 0.5s delay between requests
+- Video processing: Sequential processing recommended
+
+---
+
+Built with FastAPI, FFmpeg, and [rembg](https://github.com/danielgatis/rembg).
