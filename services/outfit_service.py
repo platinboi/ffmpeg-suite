@@ -107,6 +107,14 @@ class OutfitService:
             )
             fade_in = max(MIN_OUTFIT_FADE_IN, min(fade_in_requested, MAX_OUTFIT_FADE_IN))
 
+            # Slightly randomize duration to ±0.75s while staying in bounds
+            duration_requested = request.duration
+            duration_jitter = random.uniform(-0.75, 0.75)
+            duration = max(
+                MIN_OUTFIT_DURATION,
+                min(MAX_OUTFIT_DURATION, duration_requested + duration_jitter)
+            )
+
             filter_complex = self._build_filter(
                 main_title_file=main_title_file,
                 subtitle_file=subtitle_file,
@@ -123,7 +131,7 @@ class OutfitService:
             cmd = self._build_ffmpeg_command(
                 filter_complex=filter_complex,
                 image_paths=image_paths,
-                duration=request.duration,
+                duration=duration,
                 output_path=output_path,
                 creation_time=creation_time
             )
