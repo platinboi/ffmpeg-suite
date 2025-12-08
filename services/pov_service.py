@@ -94,8 +94,8 @@ class POVTemplateService:
         try:
             # Download all images concurrently
             download_tasks = [
-                self.download_service.download_from_url(str(url))
-                for url in request.image_urls
+                self.download_service.download_from_url(str(request.images[slot]))
+                for slot in self.INPUT_ORDER
             ]
             results = await asyncio.gather(*download_tasks)
             image_paths = [path for path, _ in results]

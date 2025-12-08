@@ -284,7 +284,7 @@ class OutfitResponse(BaseModel):
 
 class POVTemplateRequest(BaseModel):
     """Request model for POV collage video (8 images, POV layout)"""
-    image_urls: List[HttpUrl] = Field(..., min_length=8, max_length=8)
+    images: Dict[Literal["cap", "flag", "landscape", "shirt", "watch", "pants", "shoes", "car"], HttpUrl]
     main_title: str = Field(
         "POV: me and the boys after doing something that is in the title",
         min_length=1,
@@ -297,12 +297,17 @@ class POVTemplateRequest(BaseModel):
     fade_in: Optional[float] = Field(DEFAULT_POV_FADE_IN, ge=MIN_POV_FADE_IN, le=MAX_POV_FADE_IN)
     response_format: Optional[Literal["binary", "url"]] = "url"
 
-    @field_validator("image_urls")
+    @field_validator("images")
     @classmethod
-    def validate_image_count(cls, v: List[HttpUrl]) -> List[HttpUrl]:
-        """Ensure exactly eight images are provided"""
-        if len(v) != 8:
-            raise ValueError("Exactly 8 image URLs are required")
+    def validate_image_keys(cls, v: Dict[str, HttpUrl]) -> Dict[str, HttpUrl]:
+        """Ensure all required slot keys are present"""
+        required = {"cap", "flag", "landscape", "shirt", "watch", "pants", "shoes", "car"}
+        missing = required - set(v.keys())
+        extra = set(v.keys()) - required
+        if missing:
+            raise ValueError(f"Missing image slots: {', '.join(sorted(missing))}")
+        if extra:
+            raise ValueError(f"Unknown image slots: {', '.join(sorted(extra))}")
         return v
 
 
