@@ -2,7 +2,7 @@
 Pydantic models for request/response validation
 """
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Dict
 import re
 
 DEFAULT_OUTFIT_DURATION = 6.0
