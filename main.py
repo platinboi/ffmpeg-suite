@@ -22,7 +22,8 @@ from models.schemas import (
     URLOverlayRequest, OverlayResponse, ErrorResponse,
     HealthResponse, TemplateListResponse, TextOverrideOptions,
     TemplateCreate, TemplateResponse, TemplateDuplicateRequest,
-    MergeRequest, MergeResponse, OutfitRequest, OutfitResponse
+    MergeRequest, MergeResponse, OutfitRequest, OutfitResponse,
+    POVTemplateRequest, POVTemplateResponse
 )
 from services.download_service import DownloadService
 from services.ffmpeg_service import FFmpegService
@@ -33,6 +34,7 @@ from services.template_service import TemplateService
 from services.database_service import DatabaseService
 from services.merge_service import MergeService
 from services.outfit_service import OutfitService
+from services.pov_service import POVTemplateService
 
 # Configure logging
 logging.basicConfig(
@@ -118,6 +120,7 @@ usage_service = UsageService()
 template_service = TemplateService()
 db_service = DatabaseService()
 outfit_service = OutfitService()
+pov_service = POVTemplateService()
 
 # Add auth middleware
 app.add_middleware(APIKeyAuthMiddleware, auth_service=auth_service)
@@ -177,6 +180,7 @@ async def root():
             "POST /overlay/url": "Add text overlay from URL",
             "POST /overlay/upload": "Add text overlay from file upload",
             "POST /outfit": "Create 9-image outfit collage video",
+            "POST /pov": "Create 8-image POV collage video",
             "GET /templates": "List available style templates",
             "GET /health": "Health check"
         },
@@ -418,6 +422,93 @@ async def create_outfit_video(
             download_service.cleanup_file(output_path)
 
         logger.error(f"Error creating outfit video: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/pov", response_model=POVTemplateResponse)
+async def create_pov_video(
+    request: POVTemplateRequest,
+    api_request: Request
+):
+    """
+    Create an 8-image POV collage video with measured layout from POV-TEMPLATE2.jpg.
+    """
+    start_time = time.time()
+    user_id = getattr(api_request.state, "user_id", "unknown")
+    output_filename = f"pov_{uuid.uuid4()}.mp4"
+    output_path = os.path.join(Config.TEMP_DIR, output_filename)
+
+    try:
+        result = await pov_service.create_pov_video(
+            request=request,
+            output_path=output_path
+        )
+
+        processing_time = time.time() - start_time
+        processing_time_ms = int(processing_time * 1000)
+
+        usage_service.track_usage(
+            user_id=user_id,
+            endpoint="/pov",
+            input_file_size_bytes=result.get("total_input_size", 0),
+            output_file_size_bytes=result.get("output_size", 0),
+            processing_time_ms=processing_time_ms,
+            template_used="pov",
+            has_custom_overrides=False
+        )
+
+        if request.response_format == "url":
+            if not storage_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="R2 storage is not enabled. Set R2_ENABLED=true in environment."
+                )
+
+            r2_url = await storage_service.upload_file(
+                file_path=output_path,
+                object_name=f"pov/{output_filename}",
+                user_id=None,
+                file_type="outputs",
+                public=True
+            )
+
+            if not r2_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to upload to R2 storage"
+                )
+
+            # Cleanup local output
+            download_service.cleanup_file(output_path)
+
+            return JSONResponse(
+                content=POVTemplateResponse(
+                    status="success",
+                    message="POV video created successfully",
+                    filename=output_filename,
+                    download_url=r2_url,
+                    processing_time=processing_time
+                ).model_dump()
+            )
+
+        # Binary response
+        return FileResponse(
+            path=output_path,
+            filename=output_filename,
+            media_type="video/mp4",
+            background=_cleanup_files([output_path])
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if output_path and os.path.exists(output_path):
+            download_service.cleanup_file(output_path)
+
+        logger.error(f"Error creating POV video: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

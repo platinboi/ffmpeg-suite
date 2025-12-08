@@ -11,6 +11,12 @@ MAX_OUTFIT_DURATION = 7.0
 DEFAULT_OUTFIT_FADE_IN = None  # Randomized when not provided
 MIN_OUTFIT_FADE_IN = 2.5
 MAX_OUTFIT_FADE_IN = 3.0
+DEFAULT_POV_DURATION = DEFAULT_OUTFIT_DURATION
+MIN_POV_DURATION = MIN_OUTFIT_DURATION
+MAX_POV_DURATION = MAX_OUTFIT_DURATION
+DEFAULT_POV_FADE_IN = DEFAULT_OUTFIT_FADE_IN
+MIN_POV_FADE_IN = MIN_OUTFIT_FADE_IN
+MAX_POV_FADE_IN = MAX_OUTFIT_FADE_IN
 
 
 class TextOverrideOptions(BaseModel):
@@ -269,6 +275,39 @@ class OutfitRequest(BaseModel):
 
 class OutfitResponse(BaseModel):
     """Response model for outfit endpoint"""
+    status: Literal["success", "error"]
+    message: str
+    filename: Optional[str] = None
+    download_url: Optional[str] = None
+    processing_time: Optional[float] = None
+
+
+class POVTemplateRequest(BaseModel):
+    """Request model for POV collage video (8 images, POV layout)"""
+    image_urls: List[HttpUrl] = Field(..., min_length=8, max_length=8)
+    main_title: str = Field(
+        "POV: me and the boys after doing something that is in the title",
+        min_length=1,
+        max_length=200
+    )
+    subtitle: str = Field("(clothes in bio)", min_length=0, max_length=200)
+    title_font_size: Optional[int] = Field(None, ge=48, le=120)
+    subtitle_font_size: Optional[int] = Field(None, ge=26, le=90)
+    duration: float = Field(DEFAULT_POV_DURATION, ge=MIN_POV_DURATION, le=MAX_POV_DURATION)
+    fade_in: Optional[float] = Field(DEFAULT_POV_FADE_IN, ge=MIN_POV_FADE_IN, le=MAX_POV_FADE_IN)
+    response_format: Optional[Literal["binary", "url"]] = "url"
+
+    @field_validator("image_urls")
+    @classmethod
+    def validate_image_count(cls, v: List[HttpUrl]) -> List[HttpUrl]:
+        """Ensure exactly eight images are provided"""
+        if len(v) != 8:
+            raise ValueError("Exactly 8 image URLs are required")
+        return v
+
+
+class POVTemplateResponse(BaseModel):
+    """Response model for POV template endpoint"""
     status: Literal["success", "error"]
     message: str
     filename: Optional[str] = None

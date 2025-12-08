@@ -188,6 +188,53 @@ curl -X POST "http://localhost:8000/outfit" \
 }
 ```
 
+### 6. POV Collage (New)
+
+**Endpoint**: `POST /pov`
+
+Generate a 5–7 second 9:16 video using 8 square images laid out exactly like `POV-TEMPLATE2.jpg`, with a black header/title, centered subtitle, and intentional overlaps. Defaults mirror the outfits flow (duration 6s with randomized 2.5–3s fade-in, URL response uploads to `pov/` in R2 when enabled).
+
+```bash
+curl -X POST "http://localhost:8000/pov" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <your-key>" \
+  -d '{
+    "image_urls": [
+      "https://example.com/cap.jpg",        # cap (top-left)
+      "https://example.com/flag.jpg",       # flag (upper mid)
+      "https://example.com/landscape.jpg",  # landscape (large right)
+      "https://example.com/shirt.jpg",      # shirt (mid-left)
+      "https://example.com/watch.jpg",      # watch (on top of shirt/landscape)
+      "https://example.com/pants.jpg",      # pants (lower-left)
+      "https://example.com/shoes.jpg",      # shoes (over pants)
+      "https://example.com/car.jpg"         # car (lower-right)
+    ],
+    "main_title": "POV: me and the boys after doing something that is in the title",
+    "subtitle": "(clothes in bio)",
+    "duration": 6,
+    "fade_in": null,
+    "response_format": "url"
+  }'
+```
+
+**Key parameters**
+- `image_urls` (required): exactly 8 URLs in the order shown above.
+- `main_title` / `subtitle`: title in black header, subtitle centered on white body.
+- `duration`: 5–7 seconds (default 6, jittered ±0.75s).
+- `fade_in`: 2.5–3 seconds (default randomized when null).
+- `response_format`: `url` (uploads to R2 `pov/`) or `binary`.
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "POV video created successfully",
+  "filename": "pov_<uuid>.mp4",
+  "download_url": "https://<bucket>.r2.dev/pov/pov_<uuid>.mp4",
+  "processing_time": 1.9
+}
+```
+
 ### 4. Health Check
 
 **Endpoint**: `GET /health`
