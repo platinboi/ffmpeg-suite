@@ -324,6 +324,7 @@ class RembgRequest(BaseModel):
     """Request model for background removal"""
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
+    folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
 
 
 class RembgResponse(BaseModel):

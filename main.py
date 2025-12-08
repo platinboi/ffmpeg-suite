@@ -683,7 +683,7 @@ async def rembg_remove_background(request: RembgRequest, api_request: Request):
         if wants_url and storage_service.enabled:
             r2_url = await storage_service.upload_file(
                 file_path=output_path,
-                object_name=f"rembg/{output_filename}",
+                object_name=f"{request.folder}/{output_filename}",
                 user_id=None,
                 file_type="outputs",
                 public=True
