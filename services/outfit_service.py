@@ -16,7 +16,9 @@ from config import Config
 from models.schemas import (
     OutfitRequest,
     MIN_OUTFIT_FADE_IN,
-    MAX_OUTFIT_FADE_IN
+    MAX_OUTFIT_FADE_IN,
+    MIN_OUTFIT_DURATION,
+    MAX_OUTFIT_DURATION
 )
 from services.download_service import DownloadService
 
