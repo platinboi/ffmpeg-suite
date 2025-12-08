@@ -662,7 +662,17 @@ async def rembg_remove_background(request: RembgRequest, api_request: Request):
         output_filename = f"rembg_{uuid.uuid4()}.png"
         output_path = os.path.join(Config.TEMP_DIR, output_filename)
 
-        rembg_service.remove_background(input_path, output_path)
+        rembg_service.remove_background(
+            input_path=input_path,
+            output_path=output_path,
+            model=request.model,
+            alpha_matting=request.alpha_matting,
+            foreground_threshold=request.foreground_threshold,
+            background_threshold=request.background_threshold,
+            erode_size=request.erode_size,
+            post_process_mask=request.post_process_mask,
+            bgcolor=request.bgcolor
+        )
 
         processing_time = time.time() - start_time
         processing_time_ms = int(processing_time * 1000)

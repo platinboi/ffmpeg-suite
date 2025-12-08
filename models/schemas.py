@@ -325,6 +325,16 @@ class RembgRequest(BaseModel):
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Model selection
+    model: Optional[str] = Field("u2net", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Alpha matting for cleaner edges
+    alpha_matting: Optional[bool] = False
+    foreground_threshold: Optional[int] = Field(240, ge=0, le=255)
+    background_threshold: Optional[int] = Field(10, ge=0, le=255)
+    erode_size: Optional[int] = Field(10, ge=0, le=50)
+    # Post-processing
+    post_process_mask: Optional[bool] = False
+    bgcolor: Optional[List[int]] = Field(None, min_length=4, max_length=4)
 
 
 class RembgResponse(BaseModel):
