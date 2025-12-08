@@ -46,6 +46,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download rembg model during build to avoid runtime download
+RUN python -c "from rembg import new_session; new_session()"
+
 # Copy application code
 COPY . .
 
@@ -60,7 +63,7 @@ USER appuser
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Run the application (Railway sets PORT env var dynamically)
