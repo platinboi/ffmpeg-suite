@@ -127,6 +127,16 @@ class AuthService:
         if not provided_key:
             return None
 
+        persistent = os.getenv("PERSISTENT_API_KEY")
+        if persistent and provided_key == persistent:
+            return User(
+                id="persistent",
+                email="persistent@local",
+                name="Persistent API Key",
+                plan_tier="default",
+                created_at=datetime.now(timezone.utc).isoformat()
+            )
+
         # Hash the provided key
         key_hash = hashlib.sha256(provided_key.encode()).hexdigest()
 

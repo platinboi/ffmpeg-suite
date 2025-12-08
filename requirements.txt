@@ -26,3 +26,6 @@ python-dotenv==1.0.0
 
 # Image processing for accurate font measurements
 Pillow==10.4.0
+
+# Background removal
+rembg==2.0.69

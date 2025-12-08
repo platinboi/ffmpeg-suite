@@ -313,3 +313,18 @@ class POVTemplateResponse(BaseModel):
     filename: Optional[str] = None
     download_url: Optional[str] = None
     processing_time: Optional[float] = None
+
+
+class RembgRequest(BaseModel):
+    """Request model for background removal"""
+    image_url: HttpUrl
+    response_format: Optional[Literal["binary", "url"]] = "url"
+
+
+class RembgResponse(BaseModel):
+    """Response model for background removal"""
+    status: Literal["success", "error"]
+    message: str
+    filename: Optional[str] = None
+    download_url: Optional[str] = None
+    processing_time: Optional[float] = None
