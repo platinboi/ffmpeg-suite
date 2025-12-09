@@ -52,7 +52,7 @@ Remove the background from an image using AI. Returns a transparent PNG.
 | `image_url` | string | *required* | URL of the image to process |
 | `response_format` | string | `"url"` | `"url"` returns R2 link, `"binary"` returns file |
 | `folder` | string | `"rembg"` | R2 folder for storage (alphanumeric, hyphens, underscores) |
-| `model` | string | `"u2net"` | AI model to use (see models below) |
+| `model` | string | `"isnet-general-use"` | AI model to use (see models below) |
 | `alpha_matting` | boolean | `false` | Enable edge refinement for cleaner cutouts |
 | `foreground_threshold` | integer | `240` | 0-255. Pixels with alpha above this are kept as foreground |
 | `background_threshold` | integer | `10` | 0-255. Pixels with alpha below this are removed as background |
@@ -64,12 +64,12 @@ Remove the background from an image using AI. Returns a transparent PNG.
 
 | Model | Description | Best For |
 |-------|-------------|----------|
-| `u2net` | General purpose model (~170MB) | Default, works well for most cases |
+| `isnet-general-use` | Modern general-purpose model | **Default**. Better edge detection, handles white-on-white well |
+| `u2net` | Original general purpose model (~170MB) | Fallback if isnet has issues |
 | `u2netp` | Lightweight u2net variant | Faster processing, slightly lower quality |
 | `u2net_human_seg` | Trained for human segmentation | People, portraits |
 | `u2net_cloth_seg` | Clothing parser | Separating clothing from background |
 | `silueta` | Compressed u2net (~43MB) | Memory-constrained environments |
-| `isnet-general-use` | Modern general-purpose model | Alternative to u2net, often better edges |
 | `isnet-anime` | Anime character segmentation | Anime, cartoon, illustrated content |
 | `birefnet-general` | High quality BiRefNet model | Best quality, slower |
 | `birefnet-general-lite` | Lightweight BiRefNet | Balance of quality and speed |

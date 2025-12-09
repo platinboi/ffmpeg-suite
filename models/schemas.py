@@ -326,7 +326,7 @@ class RembgRequest(BaseModel):
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
     # Model selection
-    model: Optional[str] = Field("u2net", pattern=r'^[a-zA-Z0-9_-]+$')
+    model: Optional[str] = Field("isnet-general-use", pattern=r'^[a-zA-Z0-9_-]+$')
     # Alpha matting for cleaner edges
     alpha_matting: Optional[bool] = False
     foreground_threshold: Optional[int] = Field(240, ge=0, le=255)
