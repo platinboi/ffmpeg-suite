@@ -225,10 +225,10 @@ class TemplateService:
             'font_size': 46,
             'font_weight': 500,
             'text_color': 'white',
-            'border_width': 3,
+            'border_width': 6,
             'border_color': 'black',
-            'shadow_x': 0,
-            'shadow_y': 0,
+            'shadow_x': 3,
+            'shadow_y': 3,
             'shadow_color': 'black',
             'position': 'center',
             'background_enabled': False,
@@ -289,3 +289,20 @@ class TemplateService:
             """, (font_size,))
             conn.commit()
             logger.info(f"✓ Updated default template font size to: {font_size}")
+
+    def update_default_template_styling(self):
+        """
+        Update the default template's border and shadow settings to match TikTok-native styling.
+        This ensures existing templates use the same visual style as the outfits endpoint.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE templates
+                SET border_width = 6,
+                    shadow_x = 3,
+                    shadow_y = 3
+                WHERE name = 'default'
+            """)
+            conn.commit()
+            logger.info("✓ Updated default template styling (border: 6px, shadow: 3px offset)")

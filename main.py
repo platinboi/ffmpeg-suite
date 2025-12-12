@@ -152,6 +152,10 @@ async def startup_event():
         logger.info("Updating default template font size...")
         template_service.update_default_template_font_size(46)
 
+        # Update default template styling to match TikTok-native outfits
+        logger.info("Updating default template styling...")
+        template_service.update_default_template_styling()
+
         # Bootstrap default user
         logger.info("Bootstrapping default user...")
         user, api_key = auth_service.bootstrap_default_user()

@@ -279,7 +279,7 @@ class FFmpegService:
         if style.shadow_x != 0 or style.shadow_y != 0:
             filter_params.append(f"shadowx={style.shadow_x}")
             filter_params.append(f"shadowy={style.shadow_y}")
-            filter_params.append(f"shadowcolor={shadow_color}@0.7")
+            filter_params.append(f"shadowcolor={shadow_color}@0.6")
 
         # Add background box if enabled
         if style.background_enabled:
