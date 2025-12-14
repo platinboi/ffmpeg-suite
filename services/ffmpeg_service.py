@@ -120,8 +120,8 @@ class FFmpegService:
                     logger.warning("Video duration not available, skipping text hiding")
                     apply_fade_out = False
 
-            # Build FFmpeg filter (returns tuple: filter_str, temp_file_path)
-            filter_str, temp_file_path = FFmpegService._build_drawtext_filter(
+            # Build FFmpeg filter
+            filter_str = FFmpegService._build_drawtext_filter(
                 text,
                 style,
                 overrides,
@@ -167,15 +167,6 @@ class FFmpegService:
                     "output_size": output_size
                 }
 
-            finally:
-                # Clean up temporary text file
-                if temp_file_path and os.path.exists(temp_file_path):
-                    try:
-                        os.unlink(temp_file_path)
-                        logger.debug(f"Cleaned up temp text file: {temp_file_path}")
-                    except Exception as cleanup_error:
-                        logger.warning(f"Failed to clean up temp file {temp_file_path}: {cleanup_error}")
-
         except subprocess.TimeoutExpired:
             raise Exception("FFmpeg processing timed out (max 2 minutes)")
         except Exception as e:
@@ -213,6 +204,27 @@ class FFmpegService:
         return style
 
     @staticmethod
+    def _escape_ffmpeg_text(text: str) -> str:
+        """
+        Escape text for FFmpeg drawtext filter's text parameter.
+        FFmpeg uses : and \\ as special chars, and supports \\n for line breaks.
+
+        Args:
+            text: Text to escape
+
+        Returns:
+            Escaped text safe for FFmpeg's text parameter
+        """
+        # Escape backslashes first (must be done before other escapes)
+        text = text.replace('\\', '\\\\')
+        # Escape colons (FFmpeg uses : as parameter separator)
+        text = text.replace(':', '\\:')
+        # Escape single quotes for shell safety
+        text = text.replace("'", "'\\\\\\''")
+        # Newlines are kept as-is - FFmpeg interprets \\n as line breaks in text parameter
+        return text
+
+    @staticmethod
     def _build_drawtext_filter(
         text: str,
         style: TextStyle,
@@ -220,7 +232,7 @@ class FFmpegService:
         scaled_font_size: Optional[int] = None,
         fade_out_duration: Optional[float] = None,
         video_duration: Optional[float] = None
-    ) -> Tuple[str, str]:
+    ) -> str:
         """
         Build FFmpeg drawtext filter string
 
@@ -233,20 +245,11 @@ class FFmpegService:
             video_duration: Total video duration in seconds (required if fade_out_duration is set)
 
         Returns:
-            Tuple of (filter_string, temp_file_path)
+            Filter string for FFmpeg drawtext
         """
-        # Write text to temporary file (avoids all FFmpeg escaping issues)
-        temp_file = tempfile.NamedTemporaryFile(
-            mode='w',
-            suffix='.txt',
-            delete=False,
-            encoding='utf-8'
-        )
-        temp_file.write(text)
-        temp_file.close()
-        temp_file_path = temp_file.name
-
-        logger.debug(f"Created temp text file: {temp_file_path}")
+        # Escape text for FFmpeg's text parameter (supports \n for line breaks)
+        escaped_text = FFmpegService._escape_ffmpeg_text(text)
+        logger.debug(f"Escaped text for FFmpeg: {escaped_text[:100]}...")
 
         # Calculate position
         x, y = FFmpegService._calculate_position(style, overrides)
@@ -260,10 +263,10 @@ class FFmpegService:
         # Use scaled font size if provided, otherwise use style font size
         font_size = scaled_font_size if scaled_font_size is not None else style.font_size
 
-        # Build filter parameters using textfile (no escaping needed)
+        # Build filter parameters using text parameter (supports \n for line breaks)
         filter_params = [
             f"fontfile={style.font_path}",
-            f"textfile={temp_file_path}",  # Use textfile - bypasses all escaping issues
+            f"text='{escaped_text}'",  # Use text parameter - properly interprets \n as line breaks
             f"fontsize={font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
@@ -312,7 +315,7 @@ class FFmpegService:
             logger.info(f"Text will disappear at {cutoff_time}s (last {fade_out_duration}s hidden)")
 
         filter_str = "drawtext=" + ":".join(filter_params)
-        return (filter_str, temp_file_path)
+        return filter_str
 
     @staticmethod
     def _calculate_position(
