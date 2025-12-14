@@ -84,13 +84,9 @@ class TextStyle:
 
 
 # Database configuration for PostgreSQL (Neon)
-# IMPORTANT: Set DATABASE_URL environment variable in production
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL environment variable is required. "
-        "Set it to your PostgreSQL connection string."
-    )
+# Note: DATABASE_URL is managed by DatabaseService with its own defaults
+# This is kept for reference/documentation purposes only
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def get_template(template_name: str) -> TextStyle:

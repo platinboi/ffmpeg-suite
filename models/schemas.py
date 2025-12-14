@@ -137,6 +137,7 @@ class HealthResponse(BaseModel):
     status: Literal["healthy", "unhealthy"]
     ffmpeg_available: bool
     fonts_available: bool
+    database_available: Optional[bool] = None  # Optional - not required for healthy status
     version: str
 
 

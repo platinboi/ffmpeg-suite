@@ -4,6 +4,7 @@ Uses Neon PostgreSQL for production-grade template storage
 """
 
 import os
+import time
 import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
@@ -12,6 +13,11 @@ from typing import Optional, Dict, List
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_RETRY_DELAY = 1  # seconds
+MAX_RETRY_DELAY = 10  # seconds
 
 
 class DatabaseService:
@@ -23,27 +29,69 @@ class DatabaseService:
             "postgresql://neondb_owner:npg_Y3uQc9xVXgze@ep-bitter-frog-ahv64lf5-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
         )
         self._connection_pool = None
-        self._initialize_pool()
+        self._pool_initialized = False
+        # Don't initialize pool in __init__ - use lazy initialization
+        # This allows the app to start even if the database is temporarily unavailable
 
-    def _initialize_pool(self):
-        """Initialize the connection pool"""
-        try:
-            self._connection_pool = pool.SimpleConnectionPool(
-                minconn=2,      # Minimum 2 connections always open
-                maxconn=10,     # Maximum 10 concurrent connections
-                dsn=self.database_url
-            )
-            logger.info("✓ Database connection pool initialized (2-10 connections)")
-        except Exception as e:
-            logger.error(f"Failed to initialize connection pool: {e}")
-            raise
+    def _initialize_pool(self, retry: bool = True) -> bool:
+        """
+        Initialize the connection pool with retry logic.
+
+        Args:
+            retry: If True, retry on failure with exponential backoff
+
+        Returns:
+            True if pool was initialized successfully, False otherwise
+        """
+        if self._pool_initialized and self._connection_pool:
+            return True
+
+        retries = MAX_RETRIES if retry else 1
+        delay = INITIAL_RETRY_DELAY
+
+        for attempt in range(retries):
+            try:
+                self._connection_pool = pool.SimpleConnectionPool(
+                    minconn=1,      # Start with 1 connection (faster startup)
+                    maxconn=10,     # Maximum 10 concurrent connections
+                    dsn=self.database_url
+                )
+                self._pool_initialized = True
+                logger.info("✓ Database connection pool initialized (1-10 connections)")
+                return True
+            except Exception as e:
+                logger.warning(f"Database pool initialization attempt {attempt + 1}/{retries} failed: {e}")
+                if attempt < retries - 1:
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                    delay = min(delay * 2, MAX_RETRY_DELAY)  # Exponential backoff
+                else:
+                    logger.error(f"Failed to initialize connection pool after {retries} attempts")
+
+        return False
+
+    def ensure_pool(self) -> bool:
+        """
+        Ensure the connection pool is initialized.
+        Call this before operations that require the database.
+
+        Returns:
+            True if pool is ready, False otherwise
+        """
+        if not self._pool_initialized:
+            return self._initialize_pool(retry=True)
+        return True
 
     @contextmanager
     def get_connection(self):
         """Context manager for database connections from pool"""
+        # Lazy initialization - initialize pool on first use
+        if not self._pool_initialized:
+            if not self._initialize_pool(retry=True):
+                raise RuntimeError("Database connection pool is not available")
+
         conn = None
         try:
-            # Get connection from pool
             conn = self._connection_pool.getconn()
             yield conn
             conn.commit()
@@ -53,8 +101,7 @@ class DatabaseService:
             logger.error(f"Database error: {e}")
             raise
         finally:
-            if conn:
-                # Return connection to pool instead of closing
+            if conn and self._connection_pool:
                 self._connection_pool.putconn(conn)
 
     def close_pool(self):
@@ -168,12 +215,19 @@ class DatabaseService:
             logger.info("✓ Templates table initialized")
 
     def check_connection(self) -> bool:
-        """Check if database connection is working"""
+        """
+        Check if database connection is working.
+        Returns False immediately if pool is not initialized (non-blocking).
+        """
+        # Quick check - if pool not initialized, don't try to initialize it
+        if not self._pool_initialized or not self._connection_pool:
+            return False
+
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1")
                 return True
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.warning(f"Database connection check failed: {e}")
             return False

@@ -205,12 +205,22 @@ async def health_check():
         ffmpeg_service.check_font_available(Config.INTER_BOLD)
     )
 
+    # Check database connectivity (non-blocking, doesn't affect health status)
+    database_available = None
+    try:
+        database_available = db_service.check_connection()
+    except Exception as e:
+        logger.warning(f"Database health check failed: {e}")
+        database_available = False
+
+    # Core health = ffmpeg + fonts (database is optional for startup)
     is_healthy = ffmpeg_available and fonts_available
 
     return HealthResponse(
         status="healthy" if is_healthy else "unhealthy",
         ffmpeg_available=ffmpeg_available,
         fonts_available=fonts_available,
+        database_available=database_available,
         version="1.0.0"
     )
 
