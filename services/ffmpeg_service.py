@@ -261,6 +261,13 @@ class FFmpegService:
         # Sanitize text - remove carriage returns
         text = text.replace('\r', '')
 
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        # Safety net in case text bypasses model validators
+        text = text.replace(''', "'")  # U+2019 right single quote → apostrophe
+        text = text.replace(''', "'")  # U+2018 left single quote → apostrophe
+        text = text.replace('"', '"')  # U+201C left double quote → straight
+        text = text.replace('"', '"')  # U+201D right double quote → straight
+
         # Remove invisible Unicode characters that could cause rendering issues
         # Keep only printable chars and newlines (category 'C' = control chars)
         text = ''.join(

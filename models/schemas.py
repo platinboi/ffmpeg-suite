@@ -87,11 +87,14 @@ class URLOverlayRequest(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Sanitize text to prevent command injection"""
-        # Remove potentially dangerous characters for shell
-        # Allow newlines for multi-line text support
-        # Include all quote variants: straight, smart/curly (both single and double)
-        dangerous_chars = ['`', '$', '"', '"', '"', "'", ''', ''']
+        """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
+        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
+        v = v.replace('"', '"')  # U+201C left double quote → straight
+        v = v.replace('"', '"')  # U+201D right double quote → straight
+        # Only remove truly dangerous shell characters (preserve apostrophes!)
+        dangerous_chars = ['`', '$']
         for char in dangerous_chars:
             v = v.replace(char, '')
         return v.strip()
@@ -108,9 +111,14 @@ class UploadOverlayRequest(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Sanitize text to prevent command injection"""
-        # Allow newlines for multi-line text support
-        dangerous_chars = ['`', '$', '"']  # Removed \n and \r
+        """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
+        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
+        v = v.replace('"', '"')  # U+201C left double quote → straight
+        v = v.replace('"', '"')  # U+201D right double quote → straight
+        # Only remove truly dangerous shell characters (preserve apostrophes!)
+        dangerous_chars = ['`', '$']
         for char in dangerous_chars:
             v = v.replace(char, '')
         return v.strip()
@@ -226,12 +234,16 @@ class ClipConfig(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Sanitize text for FFmpeg - remove control chars and dangerous shell characters"""
-        # Remove carriage returns (Windows line endings leave \r after split)
+        """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        # Remove carriage returns (Windows line endings)
         v = v.replace('\r', '')
-        # Remove dangerous shell characters
-        # Include all quote variants: straight, smart/curly (both single and double)
-        dangerous_chars = ['`', '$', '"', '"', '"', "'", ''', ''']
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
+        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
+        v = v.replace('"', '"')  # U+201C left double quote → straight
+        v = v.replace('"', '"')  # U+201D right double quote → straight
+        # Only remove truly dangerous shell characters (preserve apostrophes!)
+        dangerous_chars = ['`', '$']
         for char in dangerous_chars:
             v = v.replace(char, '')
         return v.strip()
