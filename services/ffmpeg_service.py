@@ -167,8 +167,9 @@ class FFmpegService:
                     "output_size": output_size
                 }
 
-        except subprocess.TimeoutExpired:
-            raise Exception("FFmpeg processing timed out (max 2 minutes)")
+            except subprocess.TimeoutExpired:
+                raise Exception("FFmpeg processing timed out (max 2 minutes)")
+
         except Exception as e:
             logger.error(f"Error adding text overlay: {str(e)}")
             raise
