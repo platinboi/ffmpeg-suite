@@ -247,29 +247,40 @@ class FFmpegService:
         Write text to a temporary file for FFmpeg textfile parameter.
         Using textfile= instead of text= bypasses FFmpeg multiline rendering bugs.
 
+        Matches the working pattern from outfit_service.py and pov_service.py.
+
         Args:
             text: Text to write to file
-            temp_dir: Directory for temp file (defaults to Config.TEMP_DIR)
+            temp_dir: Directory for temp file (unused, kept for compatibility)
 
         Returns:
             Path to the temporary text file
         """
-        if temp_dir is None:
-            temp_dir = Config.TEMP_DIR
+        import unicodedata
 
-        # Sanitize text - remove carriage returns and other control chars
+        # Sanitize text - remove carriage returns
         text = text.replace('\r', '')
 
-        # Create temp file with explicit UTF-8 encoding
-        fd, filepath = tempfile.mkstemp(suffix='.txt', dir=temp_dir)
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                f.write(text)
-        except Exception:
-            os.close(fd)
-            raise
+        # Remove invisible Unicode characters that could cause rendering issues
+        # Keep only printable chars and newlines (category 'C' = control chars)
+        text = ''.join(
+            char for char in text
+            if not unicodedata.category(char).startswith('C') or char == '\n'
+        )
 
-        return filepath
+        # Use NamedTemporaryFile like the working outfit/pov services
+        # This pattern is proven to work correctly with FFmpeg
+        tmp = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".txt",
+            mode="w",
+            encoding="utf-8"
+        )
+        tmp.write(text)
+        tmp.flush()
+        tmp.close()
+
+        return tmp.name
 
     @staticmethod
     def _build_drawtext_filter(
@@ -310,11 +321,10 @@ class FFmpegService:
         font_size = scaled_font_size if scaled_font_size is not None else style.font_size
 
         # Build filter parameters using textfile parameter (more reliable for multiline)
-        # Escape the path for FFmpeg filter syntax (colons need escaping)
-        escaped_path = textfile_path.replace(':', '\\:')
+        # Match the working pattern from outfit_service.py - quote paths, no escaping needed on Unix
         filter_params = [
-            f"fontfile={style.font_path}",
-            f"textfile='{escaped_path}'",  # Use textfile - bypasses FFmpeg multiline bugs
+            f"fontfile='{style.font_path}'",
+            f"textfile='{textfile_path}'",  # Use textfile - bypasses FFmpeg multiline bugs
             f"fontsize={font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
@@ -347,9 +357,8 @@ class FFmpegService:
             # Default to centered alignment for center position
             filter_params.append("text_align=C")
 
-        # Add line spacing (negative for tighter TikTok-style spacing)
-        line_spacing = overrides.line_spacing if (overrides and overrides.line_spacing is not None) else style.line_spacing
-        filter_params.append(f"line_spacing={line_spacing}")
+        # NOTE: line_spacing parameter REMOVED - it causes "box+X" broken glyphs
+        # The working outfit_service.py and pov_service.py do NOT use line_spacing
 
         # Add instant disappearance effect if requested
         if fade_out_duration is not None and video_duration is not None:
