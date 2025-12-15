@@ -297,45 +297,41 @@ class FFmpegService:
         # Use scaled font size if provided, otherwise use style font size
         font_size = scaled_font_size if scaled_font_size is not None else style.font_size
 
-        # Build filter parameters using textfile parameter (more reliable for multiline)
-        # Match the working pattern from outfit_service.py - quote paths, no escaping needed on Unix
+        # Build filter parameters in EXACT order matching outfit_service.py
+        # ORDER MATTERS for multiline text! text_align must come BEFORE x,y
+        # outfit_service order: fontfile:textfile:fontsize:fontcolor:bordercolor:borderw:shadowcolor:shadowx:shadowy:text_align:x:y
         filter_params = [
             f"fontfile='{style.font_path}'",
-            f"textfile='{textfile_path}'",  # Use textfile - bypasses FFmpeg multiline bugs
+            f"textfile='{textfile_path}'",
             f"fontsize={font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
-            f"x={x}",
-            f"y={y}",
         ]
 
-        # Add border if enabled
-        if style.border_width > 0:
-            filter_params.append(f"borderw={style.border_width}")
-            filter_params.append(f"bordercolor={border_color}")
+        # Border (always add like outfit_service)
+        filter_params.append(f"bordercolor={border_color}")
+        filter_params.append(f"borderw={style.border_width}")
 
-        # Add shadow
-        if style.shadow_x != 0 or style.shadow_y != 0:
-            filter_params.append(f"shadowx={style.shadow_x}")
-            filter_params.append(f"shadowy={style.shadow_y}")
-            filter_params.append(f"shadowcolor={shadow_color}@0.6")
+        # Shadow (always add like outfit_service)
+        filter_params.append(f"shadowcolor={shadow_color}@0.6")
+        filter_params.append(f"shadowx={style.shadow_x}")
+        filter_params.append(f"shadowy={style.shadow_y}")
 
-        # Add background box if enabled
-        if style.background_enabled:
-            filter_params.append("box=1")
-            filter_params.append(f"boxcolor={bg_color}@{style.background_opacity}")
-            filter_params.append("boxborderw=5")
-
-        # Add alignment - use full word form for better compatibility with multiline text
-        # (outfit_service uses 'center' not 'C' and works correctly)
+        # text_align MUST come BEFORE x,y - this is critical for multiline!
         if overrides and overrides.alignment:
             alignment_map = {"left": "left", "center": "center", "right": "right"}
             filter_params.append(f"text_align={alignment_map[overrides.alignment]}")
         elif style.position == "center":
-            # Default to centered alignment for center position
             filter_params.append("text_align=center")
 
-        # NOTE: line_spacing parameter REMOVED - it causes "box+X" broken glyphs
-        # The working outfit_service.py and pov_service.py do NOT use line_spacing
+        # x,y position AFTER text_align
+        filter_params.append(f"x={x}")
+        filter_params.append(f"y={y}")
+
+        # Background box (optional, appended last)
+        if style.background_enabled:
+            filter_params.append("box=1")
+            filter_params.append(f"boxcolor={bg_color}@{style.background_opacity}")
+            filter_params.append("boxborderw=5")
 
         # Add instant disappearance effect if requested
         if fade_out_duration is not None and video_duration is not None:
