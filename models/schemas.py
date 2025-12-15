@@ -223,6 +223,19 @@ class ClipConfig(BaseModel):
     template: str = "default"
     overrides: Optional[TextOverrideOptions] = None
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Sanitize text for FFmpeg - remove control chars and dangerous shell characters"""
+        # Remove carriage returns (Windows line endings leave \r after split)
+        v = v.replace('\r', '')
+        # Remove dangerous shell characters
+        # Include all quote variants: straight, smart/curly (both single and double)
+        dangerous_chars = ['`', '$', '"', '"', '"', "'", ''', ''']
+        for char in dangerous_chars:
+            v = v.replace(char, '')
+        return v.strip()
+
 
 class MergeRequest(BaseModel):
     """Request model for merging multiple clips with overlays"""

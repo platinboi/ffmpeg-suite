@@ -120,27 +120,32 @@ class FFmpegService:
                     logger.warning("Video duration not available, skipping text hiding")
                     apply_fade_out = False
 
-            # Build FFmpeg filter
-            filter_str = FFmpegService._build_drawtext_filter(
-                text,
-                style,
-                overrides,
-                scaled_font_size=scaled_font_size,
-                fade_out_duration=fade_out_duration if apply_fade_out else None,
-                video_duration=video_duration if apply_fade_out else None
-            )
-
-            # Determine if input is image or video
-            is_image = FFmpegService._is_image(input_path)
-
-            # Build FFmpeg command
-            cmd = FFmpegService._build_ffmpeg_command(
-                input_path, output_path, filter_str, is_image
-            )
-
-            logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+            # Write text to temp file for FFmpeg textfile parameter
+            # Using textfile= instead of text= bypasses FFmpeg multiline rendering bugs
+            text_file_path = FFmpegService._write_text_file(text)
+            logger.info(f"Created temp text file for FFmpeg: {text_file_path}")
 
             try:
+                # Build FFmpeg filter using textfile path
+                filter_str = FFmpegService._build_drawtext_filter(
+                    text_file_path,
+                    style,
+                    overrides,
+                    scaled_font_size=scaled_font_size,
+                    fade_out_duration=fade_out_duration if apply_fade_out else None,
+                    video_duration=video_duration if apply_fade_out else None
+                )
+
+                # Determine if input is image or video
+                is_image = FFmpegService._is_image(input_path)
+
+                # Build FFmpeg command
+                cmd = FFmpegService._build_ffmpeg_command(
+                    input_path, output_path, filter_str, is_image
+                )
+
+                logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+
                 # Execute FFmpeg
                 process = subprocess.run(
                     cmd,
@@ -169,6 +174,15 @@ class FFmpegService:
 
             except subprocess.TimeoutExpired:
                 raise Exception("FFmpeg processing timed out (max 2 minutes)")
+
+            finally:
+                # Clean up temp text file
+                if os.path.exists(text_file_path):
+                    try:
+                        os.remove(text_file_path)
+                        logger.debug(f"Cleaned up temp text file: {text_file_path}")
+                    except Exception as cleanup_err:
+                        logger.warning(f"Failed to clean up temp text file {text_file_path}: {cleanup_err}")
 
         except Exception as e:
             logger.error(f"Error adding text overlay: {str(e)}")
@@ -228,8 +242,38 @@ class FFmpegService:
         return text
 
     @staticmethod
+    def _write_text_file(text: str, temp_dir: str = None) -> str:
+        """
+        Write text to a temporary file for FFmpeg textfile parameter.
+        Using textfile= instead of text= bypasses FFmpeg multiline rendering bugs.
+
+        Args:
+            text: Text to write to file
+            temp_dir: Directory for temp file (defaults to Config.TEMP_DIR)
+
+        Returns:
+            Path to the temporary text file
+        """
+        if temp_dir is None:
+            temp_dir = Config.TEMP_DIR
+
+        # Sanitize text - remove carriage returns and other control chars
+        text = text.replace('\r', '')
+
+        # Create temp file with explicit UTF-8 encoding
+        fd, filepath = tempfile.mkstemp(suffix='.txt', dir=temp_dir)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(text)
+        except Exception:
+            os.close(fd)
+            raise
+
+        return filepath
+
+    @staticmethod
     def _build_drawtext_filter(
-        text: str,
+        textfile_path: str,
         style: TextStyle,
         overrides: Optional[TextOverrideOptions] = None,
         scaled_font_size: Optional[int] = None,
@@ -237,10 +281,11 @@ class FFmpegService:
         video_duration: Optional[float] = None
     ) -> str:
         """
-        Build FFmpeg drawtext filter string
+        Build FFmpeg drawtext filter string using textfile parameter.
+        Using textfile= instead of text= bypasses known FFmpeg multiline bugs.
 
         Args:
-            text: Text to display
+            textfile_path: Path to text file containing the text to display
             style: Text style configuration
             overrides: Optional style overrides
             scaled_font_size: Font size scaled for video resolution (if None, uses style.font_size)
@@ -250,9 +295,7 @@ class FFmpegService:
         Returns:
             Filter string for FFmpeg drawtext
         """
-        # Escape text for FFmpeg's text parameter (supports \n for line breaks)
-        escaped_text = FFmpegService._escape_ffmpeg_text(text)
-        logger.debug(f"Escaped text for FFmpeg: {escaped_text[:100]}...")
+        logger.debug(f"Building drawtext filter with textfile: {textfile_path}")
 
         # Calculate position
         x, y = FFmpegService._calculate_position(style, overrides)
@@ -266,10 +309,12 @@ class FFmpegService:
         # Use scaled font size if provided, otherwise use style font size
         font_size = scaled_font_size if scaled_font_size is not None else style.font_size
 
-        # Build filter parameters using text parameter (supports \n for line breaks)
+        # Build filter parameters using textfile parameter (more reliable for multiline)
+        # Escape the path for FFmpeg filter syntax (colons need escaping)
+        escaped_path = textfile_path.replace(':', '\\:')
         filter_params = [
             f"fontfile={style.font_path}",
-            f"text='{escaped_text}'",  # Use text parameter - properly interprets \n as line breaks
+            f"textfile='{escaped_path}'",  # Use textfile - bypasses FFmpeg multiline bugs
             f"fontsize={font_size}",
             f"fontcolor={text_color}@{style.text_opacity}",
             f"x={x}",
