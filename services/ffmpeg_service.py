@@ -369,20 +369,27 @@ class FFmpegService:
         filter_str: str,
         is_image: bool
     ) -> list:
-        """Build complete FFmpeg command"""
+        """Build complete FFmpeg command using filter_complex (matches outfit_service)"""
         cmd = ['ffmpeg', '-y', '-i', input_path]
 
+        # Use -filter_complex instead of -vf to match outfit_service
+        # This fixes BOX symbols appearing at end of lines in multiline text
+        filter_complex = f"[0:v]{filter_str}[vout]"
+
         if is_image:
-            # For images, use simple filter
+            # For images, use filter_complex for consistent text rendering
             cmd.extend([
-                '-vf', filter_str,
+                '-filter_complex', filter_complex,
+                '-map', '[vout]',
                 '-q:v', '2',  # High quality
                 output_path
             ])
         else:
-            # For videos, preserve audio and use appropriate codecs
+            # For videos, use filter_complex and preserve audio
             cmd.extend([
-                '-vf', filter_str,
+                '-filter_complex', filter_complex,
+                '-map', '[vout]',
+                '-map', '0:a?',  # Map audio if exists (? = optional, won't fail if no audio)
                 '-c:v', 'libx264',  # H.264 video codec
                 '-preset', 'slow',  # Encoding speed/quality tradeoff (slow = better quality)
                 '-crf', '18',  # Constant Rate Factor (18 = high quality, lower = better)
