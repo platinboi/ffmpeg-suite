@@ -244,42 +244,10 @@ class FFmpegService:
     @staticmethod
     def _write_text_file(text: str, temp_dir: str = None) -> str:
         """
-        Write text to a temporary file for FFmpeg textfile parameter.
-        Using textfile= instead of text= bypasses FFmpeg multiline rendering bugs.
-
-        Matches the working pattern from outfit_service.py and pov_service.py.
-
-        Args:
-            text: Text to write to file
-            temp_dir: Directory for temp file (unused, kept for compatibility)
-
-        Returns:
-            Path to the temporary text file
+        Write text to temp file for FFmpeg textfile parameter.
+        ZERO preprocessing - matches working outfit_service.py exactly.
+        Preprocessing CAUSES BOX symbols, not fixes them!
         """
-        import unicodedata
-
-        # Sanitize text - remove carriage returns
-        text = text.replace('\r', '')
-
-        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
-        # Safety net in case text bypasses model validators
-        text = text.replace(''', "'")  # U+2019 right single quote → apostrophe
-        text = text.replace(''', "'")  # U+2018 left single quote → apostrophe
-        text = text.replace('"', '"')  # U+201C left double quote → straight
-        text = text.replace('"', '"')  # U+201D right double quote → straight
-
-        # Remove invisible Unicode characters that could cause rendering issues
-        # Keep only printable chars and newlines (category 'C' = control chars)
-        text = ''.join(
-            char for char in text
-            if not unicodedata.category(char).startswith('C') or char == '\n'
-        )
-
-        # Strip trailing whitespace to prevent BOX symbol at line endings
-        text = text.strip()
-
-        # Use NamedTemporaryFile like the working outfit/pov services
-        # This pattern is proven to work correctly with FFmpeg
         tmp = tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".txt",
@@ -289,7 +257,6 @@ class FFmpegService:
         tmp.write(text)
         tmp.flush()
         tmp.close()
-
         return tmp.name
 
     @staticmethod
@@ -543,63 +510,24 @@ class FFmpegService:
         max_width_percent: int
     ) -> str:
         """
-        Wrap text based on max width percentage using character-based estimation.
-        Simple and reliable approach that doesn't depend on Pillow font loading.
-
-        Args:
-            text: Input text
-            font_size: Font size in pixels
-            font_path: Absolute path to font file (not used, kept for compatibility)
-            img_width: Image width in pixels
-            max_width_percent: Max text width as percentage (10-100)
-
-        Returns:
-            Text with newlines inserted for wrapping
+        Wrap text using textwrap.wrap() - matches working outfit_service pattern.
+        NO preprocessing - that causes BOX symbols!
         """
+        import textwrap
+
+        if not text:
+            return ""
+
         max_width_px = (img_width * max_width_percent) / 100
+        avg_char_px = max(font_size * 0.55, 1)
+        max_chars = max(1, int(max_width_px / avg_char_px))
 
-        # Estimate average character width for the font
-        # For TikTok Sans and similar fonts at typical sizes, ~0.55 * font_size works well
-        avg_char_width = font_size * 0.55
-        max_chars_per_line = int(max_width_px / avg_char_width)
+        logger.info(f"[TEXT WRAP] max_width_px={max_width_px}, avg_char_px={avg_char_px}, max_chars={max_chars}")
 
-        # Ensure minimum line length
-        if max_chars_per_line < 10:
-            max_chars_per_line = 10
-
-        logger.info(f"[TEXT WRAP] max_width_px={max_width_px}, avg_char_width={avg_char_width}, max_chars={max_chars_per_line}")
-
-        wrapped_lines = []
-        # Split by existing line breaks first (preserve manual newlines)
-        paragraphs = text.split('\n')
-
-        for paragraph in paragraphs:
-            if not paragraph.strip():
-                # Preserve empty lines
-                wrapped_lines.append('')
-                continue
-
-            words = paragraph.split(' ')
-            current_line = ''
-
-            for word in words:
-                # Test adding this word to the current line
-                test_line = current_line + (' ' if current_line else '') + word
-
-                # Check if adding this word exceeds max character count
-                if len(test_line) > max_chars_per_line and current_line:
-                    # Current line is full, start new line (rstrip to prevent BOX at line ends)
-                    wrapped_lines.append(current_line.rstrip())
-                    current_line = word
-                else:
-                    # Word fits, add to current line
-                    current_line = test_line
-
-            # Add remaining text (rstrip to prevent BOX at line ends)
-            if current_line:
-                wrapped_lines.append(current_line.rstrip())
-
-        return '\n'.join(wrapped_lines)
+        lines = textwrap.wrap(text, width=max_chars)
+        if not lines:
+            return ""
+        return "\n".join(lines)
 
     async def trim_video(
         self,
