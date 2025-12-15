@@ -275,6 +275,9 @@ class FFmpegService:
             if not unicodedata.category(char).startswith('C') or char == '\n'
         )
 
+        # Strip trailing whitespace to prevent BOX symbol at line endings
+        text = text.strip()
+
         # Use NamedTemporaryFile like the working outfit/pov services
         # This pattern is proven to work correctly with FFmpeg
         tmp = tempfile.NamedTemporaryFile(
@@ -355,14 +358,14 @@ class FFmpegService:
             filter_params.append(f"boxcolor={bg_color}@{style.background_opacity}")
             filter_params.append("boxborderw=5")
 
-        # Add alignment - FFmpeg uses single-letter flags: L (left), C (center), R (right)
-        # Always add for center position to ensure multiline text centers properly
+        # Add alignment - use full word form for better compatibility with multiline text
+        # (outfit_service uses 'center' not 'C' and works correctly)
         if overrides and overrides.alignment:
-            alignment_map = {"left": "L", "center": "C", "right": "R"}
+            alignment_map = {"left": "left", "center": "center", "right": "right"}
             filter_params.append(f"text_align={alignment_map[overrides.alignment]}")
         elif style.position == "center":
             # Default to centered alignment for center position
-            filter_params.append("text_align=C")
+            filter_params.append("text_align=center")
 
         # NOTE: line_spacing parameter REMOVED - it causes "box+X" broken glyphs
         # The working outfit_service.py and pov_service.py do NOT use line_spacing
@@ -585,16 +588,16 @@ class FFmpegService:
 
                 # Check if adding this word exceeds max character count
                 if len(test_line) > max_chars_per_line and current_line:
-                    # Current line is full, start new line
-                    wrapped_lines.append(current_line)
+                    # Current line is full, start new line (rstrip to prevent BOX at line ends)
+                    wrapped_lines.append(current_line.rstrip())
                     current_line = word
                 else:
                     # Word fits, add to current line
                     current_line = test_line
 
-            # Add remaining text
+            # Add remaining text (rstrip to prevent BOX at line ends)
             if current_line:
-                wrapped_lines.append(current_line)
+                wrapped_lines.append(current_line.rstrip())
 
         return '\n'.join(wrapped_lines)
 
