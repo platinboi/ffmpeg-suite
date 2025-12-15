@@ -26,34 +26,60 @@ def sanitize_unicode(text: str) -> str:
     """
     import unicodedata
 
-    # Characters that cause BOX symbols in FFmpeg
-    invisible_chars = {
-        '\u2028',  # Line separator
-        '\u2029',  # Paragraph separator
-        '\u200b',  # Zero-width space
-        '\ufeff',  # BOM / zero-width no-break space
-        '\ufffd',  # Replacement character (IS the BOX)
-        '\u200e',  # Left-to-right mark
-        '\u200f',  # Right-to-left mark
-        '\u200c',  # Zero-width non-joiner
-        '\u200d',  # Zero-width joiner
+    if not text:
+        return ""
+
+    # Normalize all common newline variants to '\n' so FFmpeg drawtext doesn't render
+    # them as missing-glyph boxes (notably U+2028/U+2029 from some mobile keyboards).
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # If U+2028/U+2029 are adjacent to '\n', treat as a single line break.
+    text = text.replace("\u2028\n", "\n").replace("\u2029\n", "\n")
+    text = text.replace("\n\u2028", "\n").replace("\n\u2029", "\n")
+
+    # Characters that are frequently invisible in UIs but render as missing glyphs in FFmpeg.
+    always_drop = {
+        "\ufeff",  # BOM / zero-width no-break space
+        "\ufffd",  # Replacement character (often the visible "box" itself)
+        "\ufffc",  # Object replacement character (common in copy/paste from rich text)
     }
 
-    result = []
+    result: list[str] = []
     for char in text:
-        # Skip invisible chars entirely
-        if char in invisible_chars:
+        # Preserve newlines
+        if char == "\n":
+            result.append("\n")
+            continue
+        # Normalize Unicode "line/paragraph separator" to newline
+        if char in {"\u2028", "\u2029"}:
+            result.append("\n")
             continue
         # Convert non-breaking space to regular space
-        if char == '\u00a0':
-            result.append(' ')
+        if char == "\u00a0":
+            result.append(" ")
             continue
-        # Skip control characters (except newline, tab, carriage return)
-        if unicodedata.category(char) == 'Cc' and char not in '\n\t\r':
+        # Convert tabs to spaces (tabs are poorly supported in drawtext unless left-aligned)
+        if char == "\t":
+            result.append(" ")
             continue
+        # Drop common problematic sentinels
+        if char in always_drop:
+            continue
+
+        cat = unicodedata.category(char)
+        # Drop all Unicode format controls (ZWSP, bidi marks, etc.)
+        if cat == "Cf":
+            continue
+        # Drop all other control chars; keep '\n' (handled above) and standard space.
+        if cat == "Cc":
+            continue
+
         result.append(char)
 
-    return ''.join(result)
+    # Strip trailing whitespace per line to avoid invisible EOL markers from rich text
+    # showing up as boxes in FFmpeg.
+    cleaned = "".join(result)
+    cleaned = "\n".join(line.rstrip(" ") for line in cleaned.split("\n"))
+    return cleaned.strip()
 
 
 class TextOverrideOptions(BaseModel):
@@ -125,11 +151,12 @@ class URLOverlayRequest(BaseModel):
     @classmethod
     def validate_text(cls, v: str) -> str:
         """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        v = sanitize_unicode(v)
         # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
-        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
-        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
-        v = v.replace('"', '"')  # U+201C left double quote → straight
-        v = v.replace('"', '"')  # U+201D right double quote → straight
+        v = v.replace("\u2019", "'")  # U+2019 right single quote → apostrophe
+        v = v.replace("\u2018", "'")  # U+2018 left single quote → apostrophe
+        v = v.replace("\u201C", '"')  # U+201C left double quote → straight
+        v = v.replace("\u201D", '"')  # U+201D right double quote → straight
         # Only remove truly dangerous shell characters (preserve apostrophes!)
         dangerous_chars = ['`', '$']
         for char in dangerous_chars:
@@ -149,11 +176,12 @@ class UploadOverlayRequest(BaseModel):
     @classmethod
     def validate_text(cls, v: str) -> str:
         """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        v = sanitize_unicode(v)
         # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
-        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
-        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
-        v = v.replace('"', '"')  # U+201C left double quote → straight
-        v = v.replace('"', '"')  # U+201D right double quote → straight
+        v = v.replace("\u2019", "'")  # U+2019 right single quote → apostrophe
+        v = v.replace("\u2018", "'")  # U+2018 left single quote → apostrophe
+        v = v.replace("\u201C", '"')  # U+201C left double quote → straight
+        v = v.replace("\u201D", '"')  # U+201D right double quote → straight
         # Only remove truly dangerous shell characters (preserve apostrophes!)
         dangerous_chars = ['`', '$']
         for char in dangerous_chars:
@@ -274,13 +302,11 @@ class ClipConfig(BaseModel):
         """Sanitize text - remove invisible Unicode chars, normalize quotes, remove dangerous chars"""
         # FIRST: Remove invisible Unicode chars that cause FFmpeg BOX symbols
         v = sanitize_unicode(v)
-        # Remove carriage returns (Windows line endings)
-        v = v.replace('\r', '')
         # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
-        v = v.replace(''', "'")  # U+2019 right single quote → apostrophe
-        v = v.replace(''', "'")  # U+2018 left single quote → apostrophe
-        v = v.replace('"', '"')  # U+201C left double quote → straight
-        v = v.replace('"', '"')  # U+201D right double quote → straight
+        v = v.replace("\u2019", "'")  # U+2019 right single quote → apostrophe
+        v = v.replace("\u2018", "'")  # U+2018 left single quote → apostrophe
+        v = v.replace("\u201C", '"')  # U+201C left double quote → straight
+        v = v.replace("\u201D", '"')  # U+201D right double quote → straight
         # Only remove truly dangerous shell characters (preserve apostrophes!)
         dangerous_chars = ['`', '$']
         for char in dangerous_chars:

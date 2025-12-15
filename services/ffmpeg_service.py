@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 from config import Config, TextStyle, get_template
-from models.schemas import TextOverrideOptions
+from models.schemas import TextOverrideOptions, sanitize_unicode
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,9 @@ class FFmpegService:
             Dict with status and details
         """
         try:
+            # Normalize invisible/control newline variants so FFmpeg drawtext doesn't render them as BOX glyphs.
+            text = sanitize_unicode(text)
+
             # Get base template
             style = get_template(template_name)
 
