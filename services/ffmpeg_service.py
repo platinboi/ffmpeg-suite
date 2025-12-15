@@ -216,6 +216,8 @@ class FFmpegService:
         Returns:
             Escaped text safe for FFmpeg's text parameter
         """
+        # Remove carriage returns (Windows \r\n line endings leave \r after split by \n)
+        text = text.replace('\r', '')
         # Escape backslashes first (must be done before other escapes)
         text = text.replace('\\', '\\\\')
         # Escape colons (FFmpeg uses : as parameter separator)
