@@ -269,82 +269,31 @@ class FFmpegService:
         video_duration: Optional[float] = None
     ) -> str:
         """
-        Build FFmpeg drawtext filter string using textfile parameter.
-        Using textfile= instead of text= bypasses known FFmpeg multiline bugs.
-
-        Args:
-            textfile_path: Path to text file containing the text to display
-            style: Text style configuration
-            overrides: Optional style overrides
-            scaled_font_size: Font size scaled for video resolution (if None, uses style.font_size)
-            fade_out_duration: Seconds before end to hide text (e.g., 2.5)
-            video_duration: Total video duration in seconds (required if fade_out_duration is set)
-
-        Returns:
-            Filter string for FFmpeg drawtext
+        Build FFmpeg drawtext filter - EXACT copy of outfit_service.py pattern.
+        Uses NAMED colors (white, black) and single f-string construction.
         """
-        logger.debug(f"Building drawtext filter with textfile: {textfile_path}")
-
-        # Calculate position
         x, y = FFmpegService._calculate_position(style, overrides)
-
-        # Convert colors to hex format
-        text_color = FFmpegService._convert_color(style.text_color)
-        border_color = FFmpegService._convert_color(style.border_color)
-        shadow_color = FFmpegService._convert_color(style.shadow_color)
-        bg_color = FFmpegService._convert_color(style.background_color)
-
-        # Use scaled font size if provided, otherwise use style font size
         font_size = scaled_font_size if scaled_font_size is not None else style.font_size
 
-        # Build filter parameters in EXACT order matching outfit_service.py
-        # ORDER MATTERS for multiline text! text_align must come BEFORE x,y
-        # outfit_service order: fontfile:textfile:fontsize:fontcolor:bordercolor:borderw:shadowcolor:shadowx:shadowy:text_align:x:y
-        filter_params = [
-            f"fontfile='{style.font_path}'",
-            f"textfile='{textfile_path}'",
-            f"fontsize={font_size}",
-            f"fontcolor={text_color}@{style.text_opacity}",
-        ]
+        # Build EXACTLY like outfit_service.py - single f-string, NAMED colors, NO hex
+        # This is the ONLY pattern that works for multiline text without BOX symbols
+        filter_str = (
+            f"drawtext=fontfile='{style.font_path}':textfile='{textfile_path}':"
+            f"fontsize={font_size}:fontcolor=white:bordercolor=black:borderw={style.border_width}:"
+            f"shadowcolor=black@0.6:shadowx={style.shadow_x}:shadowy={style.shadow_y}:"
+            f"text_align=center:x={x}:y={y}"
+        )
 
-        # Border (always add like outfit_service)
-        filter_params.append(f"bordercolor={border_color}")
-        filter_params.append(f"borderw={style.border_width}")
-
-        # Shadow (always add like outfit_service)
-        filter_params.append(f"shadowcolor={shadow_color}@0.6")
-        filter_params.append(f"shadowx={style.shadow_x}")
-        filter_params.append(f"shadowy={style.shadow_y}")
-
-        # text_align MUST come BEFORE x,y - this is critical for multiline!
-        if overrides and overrides.alignment:
-            alignment_map = {"left": "left", "center": "center", "right": "right"}
-            filter_params.append(f"text_align={alignment_map[overrides.alignment]}")
-        elif style.position == "center":
-            filter_params.append("text_align=center")
-
-        # x,y position AFTER text_align
-        filter_params.append(f"x={x}")
-        filter_params.append(f"y={y}")
-
-        # Background box (optional, appended last)
-        if style.background_enabled:
-            filter_params.append("box=1")
-            filter_params.append(f"boxcolor={bg_color}@{style.background_opacity}")
-            filter_params.append("boxborderw=5")
-
-        # Add instant disappearance effect if requested
+        # Add alpha for text disappearance if requested
         if fade_out_duration is not None and video_duration is not None:
-            # Calculate cutoff time (when text should disappear)
             cutoff_time = video_duration - fade_out_duration
-
-            # Alpha expression: Full opacity until cutoff_time, then instantly invisible
-            # if(lt(t,CUTOFF_TIME),1,0)
-            alpha_expr = f"if(lt(t\\,{cutoff_time})\\,1\\,0)"
-            filter_params.append(f"alpha='{alpha_expr}'")
+            # Insert alpha parameter before the closing
+            filter_str = filter_str.replace(
+                f":x={x}:y={y}",
+                f":alpha='if(lt(t\\,{cutoff_time})\\,1\\,0)':x={x}:y={y}"
+            )
             logger.info(f"Text will disappear at {cutoff_time}s (last {fade_out_duration}s hidden)")
 
-        filter_str = "drawtext=" + ":".join(filter_params)
         return filter_str
 
     @staticmethod
