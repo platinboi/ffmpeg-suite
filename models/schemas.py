@@ -19,6 +19,43 @@ MIN_POV_FADE_IN = MIN_OUTFIT_FADE_IN
 MAX_POV_FADE_IN = MAX_OUTFIT_FADE_IN
 
 
+def sanitize_unicode(text: str) -> str:
+    """
+    Remove invisible Unicode characters that cause FFmpeg BOX symbol rendering issues.
+    These characters pass through textwrap.wrap() unchanged but FFmpeg can't render them.
+    """
+    import unicodedata
+
+    # Characters that cause BOX symbols in FFmpeg
+    invisible_chars = {
+        '\u2028',  # Line separator
+        '\u2029',  # Paragraph separator
+        '\u200b',  # Zero-width space
+        '\ufeff',  # BOM / zero-width no-break space
+        '\ufffd',  # Replacement character (IS the BOX)
+        '\u200e',  # Left-to-right mark
+        '\u200f',  # Right-to-left mark
+        '\u200c',  # Zero-width non-joiner
+        '\u200d',  # Zero-width joiner
+    }
+
+    result = []
+    for char in text:
+        # Skip invisible chars entirely
+        if char in invisible_chars:
+            continue
+        # Convert non-breaking space to regular space
+        if char == '\u00a0':
+            result.append(' ')
+            continue
+        # Skip control characters (except newline, tab, carriage return)
+        if unicodedata.category(char) == 'Cc' and char not in '\n\t\r':
+            continue
+        result.append(char)
+
+    return ''.join(result)
+
+
 class TextOverrideOptions(BaseModel):
     """Optional overrides for text styling"""
     font_family: Optional[Literal["regular", "bold"]] = None  # Deprecated, use font_weight instead
@@ -234,7 +271,9 @@ class ClipConfig(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Sanitize text - normalize quotes for font compatibility, remove dangerous chars"""
+        """Sanitize text - remove invisible Unicode chars, normalize quotes, remove dangerous chars"""
+        # FIRST: Remove invisible Unicode chars that cause FFmpeg BOX symbols
+        v = sanitize_unicode(v)
         # Remove carriage returns (Windows line endings)
         v = v.replace('\r', '')
         # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
