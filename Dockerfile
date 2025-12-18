@@ -67,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Run the application (Railway sets PORT env var dynamically)
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 600"

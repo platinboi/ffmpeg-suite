@@ -31,8 +31,8 @@ class DownloadService:
             Exception: If download fails
         """
         try:
-            # Increase timeout for large video files
-            timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes for video downloads
+            # Use configurable timeout for downloads
+            timeout = aiohttp.ClientTimeout(total=Config.DOWNLOAD_TIMEOUT)  # Configurable download timeout
 
             # Add browser-like headers to bypass Cloudflare bot protection
             headers = {
@@ -91,7 +91,7 @@ class DownloadService:
                     return file_path, content_type
 
         except asyncio.TimeoutError:
-            raise Exception(f"Download timed out after {Config.UPLOAD_TIMEOUT} seconds")
+            raise Exception(f"Download timed out after {Config.DOWNLOAD_TIMEOUT} seconds")
         except aiohttp.ClientError as e:
             raise Exception(f"Network error during download: {str(e)}")
         except Exception as e:

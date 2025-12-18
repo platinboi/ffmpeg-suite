@@ -15,6 +15,7 @@ import uuid
 import logging
 import time
 import json
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -124,6 +125,9 @@ db_service = DatabaseService()
 outfit_service = OutfitService()
 pov_service = POVTemplateService()
 rembg_service = RembgService()
+
+# Concurrency control for resource-intensive endpoints
+REMBG_SEMAPHORE = asyncio.Semaphore(3)  # Max 3 concurrent rembg requests
 
 # Add auth middleware
 app.add_middleware(APIKeyAuthMiddleware, auth_service=auth_service)
@@ -663,98 +667,101 @@ async def rembg_remove_background(request: RembgRequest, api_request: Request):
     """
     Remove background from an image URL using rembg (served in-process).
     """
-    input_path = None
-    output_path = None
-    start_time = time.time()
-    user_id = getattr(api_request.state, "user_id", "unknown")
+    async with REMBG_SEMAPHORE:  # Limit concurrent requests to 3
+        input_path = None
+        output_path = None
+        start_time = time.time()
+        user_id = getattr(api_request.state, "user_id", "unknown")
 
-    try:
-        input_path, content_type = await download_service.download_from_url(str(request.image_url))
-        if not download_service.validate_file_extension(input_path):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file type (images only).")
+        try:
+            input_path, content_type = await download_service.download_from_url(str(request.image_url))
+            if not download_service.validate_file_extension(input_path):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file type (images only).")
 
-        output_filename = f"rembg_{uuid.uuid4()}.png"
-        output_path = os.path.join(Config.TEMP_DIR, output_filename)
+            output_filename = f"rembg_{uuid.uuid4()}.png"
+            output_path = os.path.join(Config.TEMP_DIR, output_filename)
 
-        rembg_service.remove_background(
-            input_path=input_path,
-            output_path=output_path,
-            model=request.model,
-            alpha_matting=request.alpha_matting,
-            foreground_threshold=request.foreground_threshold,
-            background_threshold=request.background_threshold,
-            erode_size=request.erode_size,
-            post_process_mask=request.post_process_mask,
-            bgcolor=request.bgcolor
-        )
-
-        processing_time = time.time() - start_time
-        processing_time_ms = int(processing_time * 1000)
-        output_size = os.path.getsize(output_path)
-
-        # Track usage (optional, keep endpoint name distinct)
-        usage_service.track_usage(
-            user_id=user_id,
-            endpoint="/rembg",
-            input_file_size_bytes=os.path.getsize(input_path),
-            output_file_size_bytes=output_size,
-            processing_time_ms=processing_time_ms,
-            template_used="rembg",
-            has_custom_overrides=False
-        )
-
-        wants_url = request.response_format == "url"
-        if wants_url and storage_service.enabled:
-            r2_url = await storage_service.upload_file(
-                file_path=output_path,
-                object_name=f"{request.folder}/{output_filename}",
-                user_id=None,
-                file_type="outputs",
-                public=True
+            # Run CPU-bound processing in thread pool to avoid blocking event loop
+            await asyncio.to_thread(
+                rembg_service.remove_background,
+                input_path=input_path,
+                output_path=output_path,
+                model=request.model,
+                alpha_matting=request.alpha_matting,
+                foreground_threshold=request.foreground_threshold,
+                background_threshold=request.background_threshold,
+                erode_size=request.erode_size,
+                post_process_mask=request.post_process_mask,
+                bgcolor=request.bgcolor
             )
 
-            if not r2_url:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to upload to storage"
+            processing_time = time.time() - start_time
+            processing_time_ms = int(processing_time * 1000)
+            output_size = os.path.getsize(output_path)
+
+            # Track usage (optional, keep endpoint name distinct)
+            usage_service.track_usage(
+                user_id=user_id,
+                endpoint="/rembg",
+                input_file_size_bytes=os.path.getsize(input_path),
+                output_file_size_bytes=output_size,
+                processing_time_ms=processing_time_ms,
+                template_used="rembg",
+                has_custom_overrides=False
+            )
+
+            wants_url = request.response_format == "url"
+            if wants_url and storage_service.enabled:
+                r2_url = await storage_service.upload_file(
+                    file_path=output_path,
+                    object_name=f"{request.folder}/{output_filename}",
+                    user_id=None,
+                    file_type="outputs",
+                    public=True
                 )
 
-            download_service.cleanup_file(input_path)
-            download_service.cleanup_file(output_path)
+                if not r2_url:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to upload to storage"
+                    )
 
-            return JSONResponse(
-                content=RembgResponse(
-                    status="success",
-                    message="Background removed successfully",
-                    filename=output_filename,
-                    download_url=r2_url,
-                    processing_time=processing_time
-                ).model_dump()
+                download_service.cleanup_file(input_path)
+                download_service.cleanup_file(output_path)
+
+                return JSONResponse(
+                    content=RembgResponse(
+                        status="success",
+                        message="Background removed successfully",
+                        filename=output_filename,
+                        download_url=r2_url,
+                        processing_time=processing_time
+                    ).model_dump()
+                )
+
+            # Binary response (or url requested but storage disabled): return file and clean up
+            def _cleanup():
+                download_service.cleanup_file(input_path)
+                download_service.cleanup_file(output_path)
+
+            task = BackgroundTask(_cleanup)
+            return FileResponse(
+                output_path,
+                media_type="image/png",
+                filename=output_filename,
+                background=task
             )
 
-        # Binary response (or url requested but storage disabled): return file and clean up
-        def _cleanup():
-            download_service.cleanup_file(input_path)
-            download_service.cleanup_file(output_path)
-
-        task = BackgroundTask(_cleanup)
-        return FileResponse(
-            output_path,
-            media_type="image/png",
-            filename=output_filename,
-            background=task
-        )
-
-    except HTTPException:
-        # let FastAPI handle
-        raise
-    except Exception as e:
-        logger.error(f"Background removal failed: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Background removal failed")
-    finally:
-        # Ensure input cleanup on failure paths (when output wasn't produced)
-        if input_path and not output_path:
-            download_service.cleanup_file(input_path)
+        except HTTPException:
+            # let FastAPI handle
+            raise
+        except Exception as e:
+            logger.error(f"Background removal failed: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Background removal failed")
+        finally:
+            # Ensure input cleanup on failure paths (when output wasn't produced)
+            if input_path and not output_path:
+                download_service.cleanup_file(input_path)
 @app.post("/overlay/url", response_model=OverlayResponse)
 async def overlay_from_url(request: URLOverlayRequest, http_request: Request):
     """

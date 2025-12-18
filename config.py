@@ -11,6 +11,7 @@ class Config:
     """Application configuration"""
     MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 100 * 1024 * 1024))  # 100MB default
     UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 30))  # 30 seconds
+    DOWNLOAD_TIMEOUT = int(os.getenv("DOWNLOAD_TIMEOUT", 300))  # 5 minutes for downloads
     TEMP_DIR = "/app/temp" if os.path.exists("/app") else "./temp"
     FONT_DIR = "/usr/share/fonts/truetype/custom" if os.path.exists("/usr/share/fonts/truetype/custom") else "./fonts"
 
