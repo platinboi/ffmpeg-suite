@@ -21,15 +21,15 @@ class RembgService:
         self,
         input_path: str,
         output_path: str,
-        model: str = "u2net",
-        alpha_matting: bool = False,
-        foreground_threshold: int = 240,
+        model: str = "isnet-general-use",
+        alpha_matting: bool = True,
+        foreground_threshold: int = 210,
         background_threshold: int = 10,
-        erode_size: int = 10,
-        post_process_mask: bool = False,
+        erode_size: int = 5,
+        post_process_mask: bool = True,
         bgcolor: Optional[List[int]] = None
     ) -> None:
-        """Remove background from image with configurable parameters."""
+        """Remove background from image with configurable parameters (optimized for quality)."""
         session = self.get_session(model)
 
         with open(input_path, "rb") as f:
