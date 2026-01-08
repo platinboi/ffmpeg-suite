@@ -355,6 +355,22 @@ class OutfitRequest(BaseModel):
     fade_in: Optional[float] = Field(DEFAULT_OUTFIT_FADE_IN, ge=MIN_OUTFIT_FADE_IN, le=MAX_OUTFIT_FADE_IN)
     response_format: Optional[Literal["binary", "url"]] = "url"
 
+    @field_validator("main_title", "subtitle")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Sanitize text - remove invisible Unicode chars that cause FFmpeg BOX symbols"""
+        v = sanitize_unicode(v)
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        v = v.replace("\u2019", "'")  # U+2019 right single quote → apostrophe
+        v = v.replace("\u2018", "'")  # U+2018 left single quote → apostrophe
+        v = v.replace("\u201C", '"')  # U+201C left double quote → straight
+        v = v.replace("\u201D", '"')  # U+201D right double quote → straight
+        # Only remove truly dangerous shell characters (preserve apostrophes!)
+        dangerous_chars = ['`', '$']
+        for char in dangerous_chars:
+            v = v.replace(char, '')
+        return v.strip()
+
     @field_validator("image_urls")
     @classmethod
     def validate_image_count(cls, v: List[HttpUrl]) -> List[HttpUrl]:
@@ -387,6 +403,22 @@ class POVTemplateRequest(BaseModel):
     duration: float = Field(DEFAULT_POV_DURATION, ge=MIN_POV_DURATION, le=MAX_POV_DURATION)
     fade_in: Optional[float] = Field(DEFAULT_POV_FADE_IN, ge=MIN_POV_FADE_IN, le=MAX_POV_FADE_IN)
     response_format: Optional[Literal["binary", "url"]] = "url"
+
+    @field_validator("main_title", "subtitle")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Sanitize text - remove invisible Unicode chars that cause FFmpeg BOX symbols"""
+        v = sanitize_unicode(v)
+        # Convert smart/curly quotes to straight quotes (TikTokSans font compatibility)
+        v = v.replace("\u2019", "'")  # U+2019 right single quote → apostrophe
+        v = v.replace("\u2018", "'")  # U+2018 left single quote → apostrophe
+        v = v.replace("\u201C", '"')  # U+201C left double quote → straight
+        v = v.replace("\u201D", '"')  # U+201D right double quote → straight
+        # Only remove truly dangerous shell characters (preserve apostrophes!)
+        dangerous_chars = ['`', '$']
+        for char in dangerous_chars:
+            v = v.replace(char, '')
+        return v.strip()
 
     @field_validator("images")
     @classmethod
