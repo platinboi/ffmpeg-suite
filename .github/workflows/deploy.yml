@@ -19,4 +19,4 @@ jobs:
             git pull origin master
             docker stop ffmpeg-suite && docker rm ffmpeg-suite
             docker build -t ffmpeg-suite .
-            docker run -d --name ffmpeg-suite -p 8000:8000 -e PERSISTENT_API_KEY=${{ secrets.API_KEY }} ffmpeg-suite
+            docker run -d --name ffmpeg-suite -p 8000:8000 --env-file /opt/ffmpeg-suite/.env ffmpeg-suite
