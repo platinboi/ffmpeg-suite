@@ -25,7 +25,8 @@ from models.schemas import (
     HealthResponse, TemplateListResponse, TextOverrideOptions,
     TemplateCreate, TemplateResponse, TemplateDuplicateRequest,
     MergeRequest, MergeResponse, OutfitRequest, OutfitResponse,
-    POVTemplateRequest, POVTemplateResponse, RembgRequest, RembgResponse
+    POVTemplateRequest, POVTemplateResponse, RembgRequest, RembgResponse,
+    OutfitSingleRequest, OutfitSingleResponse
 )
 from services.download_service import DownloadService
 from services.ffmpeg_service import FFmpegService
@@ -38,6 +39,7 @@ from services.merge_service import MergeService
 from services.outfit_service import OutfitService
 from services.pov_service import POVTemplateService
 from services.rembg_service import RembgService
+from services.outfit_single_service import OutfitSingleService
 
 # Configure logging
 logging.basicConfig(
@@ -125,6 +127,7 @@ db_service = DatabaseService()
 outfit_service = OutfitService()
 pov_service = POVTemplateService()
 rembg_service = RembgService()
+outfit_single_service = OutfitSingleService()
 
 # Concurrency control for resource-intensive endpoints
 REMBG_SEMAPHORE = asyncio.Semaphore(3)  # Max 3 concurrent rembg requests
@@ -191,6 +194,7 @@ async def root():
             "POST /overlay/url": "Add text overlay from URL",
             "POST /overlay/upload": "Add text overlay from file upload",
             "POST /outfit": "Create 9-image outfit collage video",
+            "POST /outfit-single": "Create 5-image outfit collage video (overlapping layout)",
             "POST /pov": "Create 8-image POV collage video",
             "POST /rembg": "Remove background from an image URL",
             "GET /templates": "List available style templates",
@@ -535,6 +539,99 @@ async def create_pov_video(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+@app.post("/outfit-single", response_model=OutfitSingleResponse)
+async def create_outfit_single_video(
+    request: OutfitSingleRequest,
+    api_request: Request
+):
+    """
+    Create a 5-image outfit-single collage video with overlapping layout.
+
+    Images are placed in a visually appealing overlapping arrangement:
+    - HAT: Top center, overlaps HOODIE
+    - HOODIE: Large base layer, left-center
+    - EXTRA: Right side, overlaps HOODIE and PANTS
+    - PANTS: Center below HOODIE
+    - SHOES: Bottom center, overlaps PANTS
+    """
+    start_time = time.time()
+    user_id = getattr(api_request.state, "user_id", "unknown")
+    output_filename = f"outfit_single_{uuid.uuid4()}.mp4"
+    output_path = os.path.join(Config.TEMP_DIR, output_filename)
+
+    try:
+        result = await outfit_single_service.create_outfit_single_video(
+            request=request,
+            output_path=output_path
+        )
+
+        processing_time = time.time() - start_time
+        processing_time_ms = int(processing_time * 1000)
+
+        usage_service.track_usage(
+            user_id=user_id,
+            endpoint="/outfit-single",
+            input_file_size_bytes=result.get("total_input_size", 0),
+            output_file_size_bytes=result.get("output_size", 0),
+            processing_time_ms=processing_time_ms,
+            template_used="outfit-single",
+            has_custom_overrides=False
+        )
+
+        if request.response_format == "url":
+            if not storage_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="R2 storage is not enabled. Set R2_ENABLED=true in environment."
+                )
+
+            r2_url = await storage_service.upload_file(
+                file_path=output_path,
+                object_name=f"outfit-single/{output_filename}",
+                user_id=None,
+                file_type="outputs",
+                public=True
+            )
+
+            if not r2_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to upload to R2 storage"
+                )
+
+            download_service.cleanup_file(output_path)
+
+            return JSONResponse(
+                content=OutfitSingleResponse(
+                    status="success",
+                    message="Outfit-single video created successfully",
+                    filename=output_filename,
+                    download_url=r2_url,
+                    processing_time=processing_time
+                ).model_dump()
+            )
+
+        return FileResponse(
+            path=output_path,
+            filename=output_filename,
+            media_type="video/mp4",
+            background=_cleanup_files([output_path])
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if output_path and os.path.exists(output_path):
+            download_service.cleanup_file(output_path)
+
+        logger.error(f"Error creating outfit-single video: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 
 @app.get("/templates", response_model=TemplateListResponse)
 async def get_templates():

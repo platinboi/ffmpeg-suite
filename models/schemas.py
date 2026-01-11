@@ -18,6 +18,14 @@ DEFAULT_POV_FADE_IN = DEFAULT_OUTFIT_FADE_IN
 MIN_POV_FADE_IN = MIN_OUTFIT_FADE_IN
 MAX_POV_FADE_IN = MAX_OUTFIT_FADE_IN
 
+# Outfit Single (V2) constants - same as outfit but for 5-image overlapping layout
+DEFAULT_OUTFIT_SINGLE_DURATION = DEFAULT_OUTFIT_DURATION
+MIN_OUTFIT_SINGLE_DURATION = MIN_OUTFIT_DURATION
+MAX_OUTFIT_SINGLE_DURATION = MAX_OUTFIT_DURATION
+DEFAULT_OUTFIT_SINGLE_FADE_IN = DEFAULT_OUTFIT_FADE_IN
+MIN_OUTFIT_SINGLE_FADE_IN = MIN_OUTFIT_FADE_IN
+MAX_OUTFIT_SINGLE_FADE_IN = MAX_OUTFIT_FADE_IN
+
 
 def sanitize_unicode(text: str) -> str:
     """
@@ -436,6 +444,62 @@ class POVTemplateRequest(BaseModel):
 
 class POVTemplateResponse(BaseModel):
     """Response model for POV template endpoint"""
+    status: Literal["success", "error"]
+    message: str
+    filename: Optional[str] = None
+    download_url: Optional[str] = None
+    processing_time: Optional[float] = None
+
+
+class OutfitSingleRequest(BaseModel):
+    """Request model for outfit-single (v2) collage video (5 overlapping images)"""
+    images: Dict[Literal["hat", "hoodie", "extra", "pants", "shoes"], HttpUrl]
+    main_title: str = Field("Choose your outfit:", min_length=1, max_length=200)
+    subtitle: str = Field("(shop in bio)", min_length=0, max_length=200)
+    title_font_size: Optional[int] = Field(None, ge=48, le=120)
+    subtitle_font_size: Optional[int] = Field(None, ge=26, le=90)
+    duration: float = Field(
+        DEFAULT_OUTFIT_SINGLE_DURATION,
+        ge=MIN_OUTFIT_SINGLE_DURATION,
+        le=MAX_OUTFIT_SINGLE_DURATION
+    )
+    fade_in: Optional[float] = Field(
+        DEFAULT_OUTFIT_SINGLE_FADE_IN,
+        ge=MIN_OUTFIT_SINGLE_FADE_IN,
+        le=MAX_OUTFIT_SINGLE_FADE_IN
+    )
+    response_format: Optional[Literal["binary", "url"]] = "url"
+
+    @field_validator("main_title", "subtitle")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Sanitize text - remove invisible Unicode chars that cause FFmpeg BOX symbols"""
+        v = sanitize_unicode(v)
+        v = v.replace("\u2019", "'")
+        v = v.replace("\u2018", "'")
+        v = v.replace("\u201C", '"')
+        v = v.replace("\u201D", '"')
+        dangerous_chars = ['`', '$']
+        for char in dangerous_chars:
+            v = v.replace(char, '')
+        return v.strip()
+
+    @field_validator("images")
+    @classmethod
+    def validate_image_keys(cls, v: Dict[str, HttpUrl]) -> Dict[str, HttpUrl]:
+        """Ensure all required slot keys are present"""
+        required = {"hat", "hoodie", "extra", "pants", "shoes"}
+        missing = required - set(v.keys())
+        extra_keys = set(v.keys()) - required
+        if missing:
+            raise ValueError(f"Missing image slots: {', '.join(sorted(missing))}")
+        if extra_keys:
+            raise ValueError(f"Unknown image slots: {', '.join(sorted(extra_keys))}")
+        return v
+
+
+class OutfitSingleResponse(BaseModel):
+    """Response model for outfit-single endpoint"""
     status: Literal["success", "error"]
     message: str
     filename: Optional[str] = None

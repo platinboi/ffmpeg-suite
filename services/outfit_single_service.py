@@ -1,10 +1,10 @@
 """
-Service for generating 9-image outfit collage videos.
+Service for generating outfit-single (v2) collage videos.
+5 overlapping square images with black header.
 """
 import asyncio
 import os
 import tempfile
-import uuid
 import logging
 import random
 import textwrap
@@ -14,73 +14,92 @@ from typing import List, Tuple, Dict
 
 from config import Config
 from models.schemas import (
-    OutfitRequest,
-    MIN_OUTFIT_FADE_IN,
-    MAX_OUTFIT_FADE_IN,
-    MIN_OUTFIT_DURATION,
-    MAX_OUTFIT_DURATION
+    OutfitSingleRequest,
+    MIN_OUTFIT_SINGLE_DURATION,
+    MAX_OUTFIT_SINGLE_DURATION,
+    MIN_OUTFIT_SINGLE_FADE_IN,
+    MAX_OUTFIT_SINGLE_FADE_IN
 )
 from services.download_service import DownloadService
 
 logger = logging.getLogger(__name__)
 
 
-class OutfitService:
-    """Handles outfit collage creation via FFmpeg"""
+class OutfitSingleService:
+    """
+    Handles outfit-single (v2) collage creation via FFmpeg.
+    5 overlapping square images with black header.
+    """
 
     CANVAS_WIDTH = 1080
     CANVAS_HEIGHT = 1920
-    TILE_SIZE = 353  # Closest to detected 353x352 placeholder
-    TILE_X = [0, 365, 727]
-    TILE_Y = [435, 891, 1361]
-    LABEL_OFFSET_Y = -70
-    LABEL_FONT_SIZE = 80
-    TITLE_FONT_SIZE_DEFAULT = 74
-    SUBTITLE_FONT_SIZE_DEFAULT = 40
-    BORDER_WIDTH = 6
-    SHADOW_X = 3
-    SHADOW_Y = 3
+    HEADER_HEIGHT = 280  # Black band at top (taller for title + subtitle)
+
+    # Text defaults
+    TITLE_FONT_SIZE_DEFAULT = 64
+    SUBTITLE_FONT_SIZE_DEFAULT = 38
+
+    BORDER_WIDTH = 0  # Clean text on solid header
+    SHADOW_X = 0
+    SHADOW_Y = 0
+
+    # Slot definitions (top-left origin). All squares.
+    # Main images (hat, hoodie, pants, shoes) are centered horizontally
+    # Extra is smaller and right-aligned
+    SLOT_LAYOUT = {
+        "hoodie": {"pos": (290, 550), "size": 500},   # centered: (1080-500)/2 = 290
+        "hat":    {"pos": (365, 320), "size": 350},   # centered: (1080-350)/2 = 365
+        "pants":  {"pos": (310, 960), "size": 460},   # centered: (1080-460)/2 = 310
+        "extra":  {"pos": (760, 825), "size": 280},   # smaller, right-aligned
+        "shoes":  {"pos": (350, 1350), "size": 380},  # centered: (1080-380)/2 = 350
+    }
+
+    # Overlay order controls z-index (later items are on top)
+    OVERLAY_ORDER = ["hoodie", "hat", "pants", "extra", "shoes"]
+
+    # Input order for API (matches request schema field order)
+    INPUT_ORDER = ["hat", "hoodie", "extra", "pants", "shoes"]
 
     def __init__(self):
         self.download_service = DownloadService()
 
-    async def create_outfit_video(
+    async def create_outfit_single_video(
         self,
-        request: OutfitRequest,
+        request: OutfitSingleRequest,
         output_path: str
     ) -> Dict:
         """
-        Build outfit collage video and return metadata.
+        Build outfit-single collage video and return metadata.
         """
         image_paths: List[str] = []
         text_files: List[str] = []
+
         try:
             # Download all images concurrently
             download_tasks = [
-                self.download_service.download_from_url(str(url))
-                for url in request.image_urls
+                self.download_service.download_from_url(str(request.images[slot]))
+                for slot in self.INPUT_ORDER
             ]
-            results: List[Tuple[str, str]] = await asyncio.gather(*download_tasks)
+            results = await asyncio.gather(*download_tasks)
             image_paths = [path for path, _ in results]
 
-            # Validate image extensions (only images, square-ish later)
+            # Validate extensions
             for path in image_paths:
                 ext = os.path.splitext(path)[1].lower()
                 if ext not in {".jpg", ".jpeg", ".png"}:
-                    raise ValueError("Only image inputs are allowed for outfit")
+                    raise ValueError("Only image inputs are allowed for outfit-single template")
 
             total_input_size = sum(os.path.getsize(p) for p in image_paths)
 
             # Font sizes (overridable)
-            requested_title_font_size = request.title_font_size or self.TITLE_FONT_SIZE_DEFAULT
-            title_font_size = int(round(requested_title_font_size * 0.92))
+            title_font_size = request.title_font_size or self.TITLE_FONT_SIZE_DEFAULT
             subtitle_font_size = request.subtitle_font_size or self.SUBTITLE_FONT_SIZE_DEFAULT
 
-            # Wrap text to avoid clipping; returns wrapped string and line counts
+            # Wrap text to avoid clipping
             wrapped_title, title_lines = self._wrap_text(
                 request.main_title,
                 font_size=title_font_size,
-                max_width_px=self.CANVAS_WIDTH - 160
+                max_width_px=self.CANVAS_WIDTH - 160  # ~80px margin each side
             )
             wrapped_subtitle, subtitle_lines = self._wrap_text(
                 request.subtitle or "",
@@ -88,33 +107,31 @@ class OutfitService:
                 max_width_px=self.CANVAS_WIDTH - 160
             )
 
-            # Vertical offsets:
-            # - Push title upward when it wraps
-            # - Push subtitle slightly downward when title wraps to avoid overlap
+            # Vertical offsets for multi-line titles
             extra_title_lines = max(0, title_lines - 1)
-            title_up = extra_title_lines * title_font_size * 0.65
-            subtitle_down = extra_title_lines * title_font_size * 0.05
+            title_up = extra_title_lines * title_font_size * 0.55
+            subtitle_down = extra_title_lines * title_font_size * 0.1
 
-            title_y = 170 - title_up
-            subtitle_y = 285 + subtitle_down
+            title_y = 95 - title_up  # Centered within taller header band
+            subtitle_y = 215 + subtitle_down
 
-            # Prepare text files for main and subtitle to avoid escaping issues
+            # Prepare text files
             main_title_file = self._write_text_file(wrapped_title, text_files)
             subtitle_file = self._write_text_file(wrapped_subtitle, text_files)
 
+            # Fade and duration
             fade_in_requested = (
                 request.fade_in
                 if request.fade_in is not None
-                else random.uniform(MIN_OUTFIT_FADE_IN, MAX_OUTFIT_FADE_IN)
+                else random.uniform(MIN_OUTFIT_SINGLE_FADE_IN, MAX_OUTFIT_SINGLE_FADE_IN)
             )
-            fade_in = max(MIN_OUTFIT_FADE_IN, min(fade_in_requested, MAX_OUTFIT_FADE_IN))
+            fade_in = max(MIN_OUTFIT_SINGLE_FADE_IN, min(fade_in_requested, MAX_OUTFIT_SINGLE_FADE_IN))
 
-            # Slightly randomize duration to ±0.75s while staying in bounds
             duration_requested = request.duration
             duration_jitter = random.uniform(-0.75, 0.75)
             duration = max(
-                MIN_OUTFIT_DURATION,
-                min(MAX_OUTFIT_DURATION, duration_requested + duration_jitter)
+                MIN_OUTFIT_SINGLE_DURATION,
+                min(MAX_OUTFIT_SINGLE_DURATION, duration_requested + duration_jitter)
             )
 
             filter_complex = self._build_filter(
@@ -129,7 +146,6 @@ class OutfitService:
 
             creation_time = datetime.now(ZoneInfo("America/New_York")).isoformat(timespec="seconds")
 
-            # Build FFmpeg command
             cmd = self._build_ffmpeg_command(
                 filter_complex=filter_complex,
                 image_paths=image_paths,
@@ -138,7 +154,7 @@ class OutfitService:
                 creation_time=creation_time
             )
 
-            logger.info("Running outfit FFmpeg command")
+            logger.info("Running outfit-single FFmpeg command")
             logger.debug("FFmpeg command: %s", " ".join(cmd))
 
             import subprocess
@@ -151,11 +167,11 @@ class OutfitService:
             )
 
             if process.returncode != 0:
-                logger.error("Outfit FFmpeg error: %s", process.stderr)
-                raise RuntimeError(f"Outfit processing failed: {process.stderr}")
+                logger.error("Outfit-single FFmpeg error: %s", process.stderr)
+                raise RuntimeError(f"Outfit-single processing failed: {process.stderr}")
 
             if not os.path.exists(output_path):
-                raise RuntimeError("Outfit output file not created")
+                raise RuntimeError("Outfit-single output file not created")
 
             output_size = os.path.getsize(output_path)
 
@@ -167,7 +183,6 @@ class OutfitService:
             }
 
         finally:
-            # Cleanup temp files
             for path in image_paths:
                 self.download_service.cleanup_file(path)
             for path in text_files:
@@ -178,10 +193,7 @@ class OutfitService:
                     logger.warning("Failed to cleanup text temp file %s: %s", path, e)
 
     def _wrap_text(self, text: str, font_size: int, max_width_px: int) -> Tuple[str, int]:
-        """
-        Wrap text based on an approximate character width so long headings don't clip.
-        Returns the wrapped text and number of lines.
-        """
+        """Wrap text based on approximate character width; returns wrapped text and line count."""
         if not text:
             return "", 0
         avg_char_px = max(font_size * 0.55, 1)
@@ -232,7 +244,6 @@ class OutfitService:
             "-preset", "slow",
             "-crf", "18",
             "-pix_fmt", "yuv420p",
-            # Clean and spoof lightweight Apple/iPhone metadata (New York, USA)
             "-map_metadata", "-1",
             "-map_chapters", "-1",
             "-metadata", "major_brand=mp42",
@@ -265,85 +276,60 @@ class OutfitService:
         """Build filter_complex string for layout, text, and fade."""
         filters: List[str] = []
 
-        # Base video from color source
-        filters.append("[0:v]format=rgba[base0]")
+        # Base video with black header band
+        filters.append(
+            f"[0:v]format=rgba,"
+            f"drawbox=x=0:y=0:w=iw:h={self.HEADER_HEIGHT}:color=black@1:t=fill[base0]"
+        )
 
-        # Prepare scaled inputs
-        for idx in range(1, 10):
+        # Prepare scaled inputs with names aligned to INPUT_ORDER
+        for idx, slot_name in enumerate(self.INPUT_ORDER, start=1):
+            size = self.SLOT_LAYOUT[slot_name]["size"]
             filters.append(
-                f"[{idx}:v]scale={self.TILE_SIZE}:{self.TILE_SIZE}:force_original_aspect_ratio=increase,"
-                f"crop={self.TILE_SIZE}:{self.TILE_SIZE},setsar=1[img{idx}]"
+                f"[{idx}:v]scale={size}:{size}:force_original_aspect_ratio=increase,"
+                f"crop={size}:{size},setsar=1[img_{slot_name}]"
             )
 
-        # Overlay tiles
+        # Overlay images in the defined z-order
         prev = "base0"
-        tile_positions = self._tile_positions()
-        for i, (x, y) in enumerate(tile_positions, start=1):
+        for i, slot_name in enumerate(self.OVERLAY_ORDER, start=1):
+            pos = self.SLOT_LAYOUT[slot_name]["pos"]
             next_label = f"ov{i}"
-            filters.append(f"[{prev}][img{i}]overlay={x}:{y}:shortest=1[{next_label}]")
+            filters.append(
+                f"[{prev}][img_{slot_name}]overlay={pos[0]}:{pos[1]}:shortest=1[{next_label}]"
+            )
             prev = next_label
 
-        # Fade body (images + labels) before adding always-visible header text
+        # Fade the body (images + header) before text is applied
         slow_ramp_until = 0.9
-        early_gamma = 0.75  # gentle dimming during the first 0.9s to slow the lift
+        early_gamma = 0.75
         filters.append(f"[{prev}]fade=t=in:st=0:d={fade_in}[faded_body]")
         filters.append(
             f"[faded_body]eq=gamma={early_gamma}:enable='between(t,0,{slow_ramp_until})'[leveled_body]"
         )
         prev = "leveled_body"
 
-        # Titles (do NOT fade)
         font_path = Config.TIKTOK_SANS_SEMIBOLD
+
+        # Title (white on black header, no fade)
         filters.append(
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{main_title_file}':"
             f"fontsize={title_font_size}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
-            f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
+            f"shadowcolor=black@0.0:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
             f"text_align=center:x=(w-text_w)/2:y={title_y}[txt_main]"
         )
         prev = "txt_main"
 
+        # Subtitle (white on black header, appears after 2.5s)
         filters.append(
             f"[{prev}]drawtext=fontfile='{font_path}':textfile='{subtitle_file}':"
             f"fontsize={subtitle_font_size}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
-            f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
+            f"shadowcolor=black@0.0:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
             f"text_align=center:x=(w-text_w)/2:y={subtitle_y}:enable='gte(t,2.5)'[txt_sub]"
         )
         prev = "txt_sub"
 
-        # Labels A-F,1-3 at tile centers with Y offset
-        label_texts = ["A\\:", "B\\:", "C\\:", "1\\:", "2\\:", "3\\:", "D\\:", "E\\:", "F\\:"]
-        label_positions = self._label_positions()
-        for i, ((x, y), text) in enumerate(zip(label_positions, label_texts)):
-            next_label = f"label{i}"
-            filters.append(
-                f"[{prev}]drawtext=fontfile='{font_path}':text='{text}':"
-                f"fontsize={self.LABEL_FONT_SIZE}:fontcolor=white:bordercolor=black:borderw={self.BORDER_WIDTH}:"
-                f"shadowcolor=black@0.6:shadowx={self.SHADOW_X}:shadowy={self.SHADOW_Y}:"
-                f"x={x}-text_w/2:y={y}[{next_label}]"
-            )
-            prev = next_label
-
-        # Fade in and pixel format
-        # Final format conversion
+        # Final format
         filters.append(f"[{prev}]format=yuv420p[video_out]")
 
         return ";".join(filters)
-
-    def _tile_positions(self) -> List[Tuple[int, int]]:
-        """Cartesian product of X and Y coordinates for 3x3 grid."""
-        positions: List[Tuple[int, int]] = []
-        for y in self.TILE_Y:
-            for x in self.TILE_X:
-                positions.append((x, y))
-        return positions
-
-    def _label_positions(self) -> List[Tuple[int, int]]:
-        """Center positions for labels above each tile."""
-        positions: List[Tuple[int, int]] = []
-        for y in self.TILE_Y:
-            label_y = y + self.LABEL_OFFSET_Y
-            for x in self.TILE_X:
-                center_x = x + self.TILE_SIZE // 2
-                positions.append((center_x, label_y))
-        return positions
-
