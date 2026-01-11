@@ -512,8 +512,8 @@ class RembgRequest(BaseModel):
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Model selection - birefnet-general provides best quality results
-    model: Optional[str] = Field("birefnet-general", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Model selection - u2net provides best quality/efficiency balance
+    model: Optional[str] = Field("u2net", pattern=r'^[a-zA-Z0-9_-]+$')
     # Alpha matting for cleaner edges (ENABLED by default for better quality, especially white-on-white)
     alpha_matting: Optional[bool] = True
     foreground_threshold: Optional[int] = Field(210, ge=0, le=255)
