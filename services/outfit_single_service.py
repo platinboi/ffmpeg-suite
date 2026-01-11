@@ -47,11 +47,11 @@ class OutfitSingleService:
     # Main images (hat, hoodie, pants, shoes) are centered horizontally
     # Extra is smaller and right-aligned
     SLOT_LAYOUT = {
-        "hoodie": {"pos": (290, 550), "size": 500},   # centered: (1080-500)/2 = 290
+        "hoodie": {"pos": (270, 590), "size": 540},   # centered: (1080-540)/2 = 270, bigger, lower
         "hat":    {"pos": (365, 320), "size": 350},   # centered: (1080-350)/2 = 365
-        "pants":  {"pos": (310, 960), "size": 460},   # centered: (1080-460)/2 = 310
-        "extra":  {"pos": (760, 825), "size": 280},   # smaller, right-aligned
-        "shoes":  {"pos": (350, 1350), "size": 380},  # centered: (1080-380)/2 = 350
+        "pants":  {"pos": (290, 1000), "size": 500},  # centered: (1080-500)/2 = 290, bigger, lower
+        "extra":  {"pos": (680, 825), "size": 280},   # moved left from 760
+        "shoes":  {"pos": (370, 1380), "size": 340},  # centered: (1080-340)/2 = 370, smaller, lower
     }
 
     # Overlay order controls z-index (later items are on top)
