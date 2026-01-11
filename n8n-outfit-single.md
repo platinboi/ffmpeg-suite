@@ -20,7 +20,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"images\": {\n    \"hat\": \"{{ $json.products.hat.url }}\",\n    \"hoodie\": \"{{ $json.products.hoodie.url }}\",\n    \"pants\": \"{{ $json.products.pants.url }}\",\n    \"extra\": \"{{ $json.products.extra.url }}\",\n    \"shoes\": \"{{ $json.products.shoes.url }}\"\n  },\n  \"main_title\": \"{{ $json.main_title }}\",\n  \"subtitle\": \"{{ $json.subtitle }}\",\n  \"title_font_size\": 64,\n  \"subtitle_font_size\": 38,\n  \"response_format\": \"url\"\n}",
+        "jsonBody": "={\n  \"images\": {\n    \"hat\": \"{{ $json.products.hat.url }}\",\n    \"hoodie\": \"{{ $json.products.hoodie.url }}\",\n    \"pants\": \"{{ $json.products.pants.url }}\",\n    \"extra\": \"{{ $json.products.extra.url }}\",\n    \"meme\": \"{{ $json.products.meme.url }}\",\n    \"shoes\": \"{{ $json.products.shoes.url }}\"\n  },\n  \"main_title\": \"{{ $json.main_title }}\",\n  \"subtitle\": \"{{ $json.subtitle }}\",\n  \"title_font_size\": 64,\n  \"subtitle_font_size\": 38,\n  \"response_format\": \"url\"\n}",
         "options": {
           "response": {
             "response": {
@@ -57,6 +57,7 @@
     "hoodie": "{{ $json.products.hoodie.url }}",
     "pants": "{{ $json.products.pants.url }}",
     "extra": "{{ $json.products.extra.url }}",
+    "meme": "{{ $json.products.meme.url }}",
     "shoes": "{{ $json.products.shoes.url }}"
   },
   "main_title": "{{ $json.main_title }}",
@@ -74,23 +75,25 @@ WITH
   caps AS (SELECT image_url, title FROM product_images WHERE product_type = 'cap' ORDER BY RANDOM() LIMIT 1),
   shirts AS (SELECT image_url, title FROM product_images WHERE product_type IN ('tshirt', 'hoodie') ORDER BY RANDOM() LIMIT 1),
   pants AS (SELECT image_url, title FROM product_images WHERE product_type = 'pants' ORDER BY RANDOM() LIMIT 1),
-  memes AS (SELECT image_url, title FROM product_images WHERE product_type = 'meme' ORDER BY RANDOM() LIMIT 1),
+  memes AS (SELECT image_url, title, ROW_NUMBER() OVER (ORDER BY RANDOM()) as rn FROM product_images WHERE product_type = 'meme'),
   shoes AS (SELECT image_url, title FROM product_images WHERE product_type = 'shoes' ORDER BY RANDOM() LIMIT 1)
 SELECT jsonb_build_object(
   'hat', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM caps),
   'hoodie', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM shirts),
   'pants', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM pants),
-  'extra', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM memes),
+  'extra', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM memes WHERE rn = 1),
+  'meme', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM memes WHERE rn = 2),
   'shoes', (SELECT jsonb_build_object('url', image_url, 'title', title) FROM shoes)
 ) as products;
 ```
 
 ## Slot Mapping
 
-| Slot | Product Type | Description |
-|------|--------------|-------------|
-| hat | cap | Caps, kippas, masks, headwear |
-| hoodie | tshirt, hoodie | Upper body clothing |
-| pants | pants | Lower body clothing |
-| extra | meme | Accessories, props |
-| shoes | shoes | Footwear |
+| Slot | Product Type | Position | Description |
+|------|--------------|----------|-------------|
+| hat | cap | top center | Caps, kippas, masks, headwear |
+| hoodie | tshirt, hoodie | center | Upper body clothing |
+| pants | pants | center-lower | Lower body clothing |
+| extra | meme | right side | Accessories, props (right) |
+| meme | meme | left side | Accessories, props (left) |
+| shoes | shoes | bottom | Footwear |

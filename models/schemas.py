@@ -452,8 +452,8 @@ class POVTemplateResponse(BaseModel):
 
 
 class OutfitSingleRequest(BaseModel):
-    """Request model for outfit-single (v2) collage video (5 overlapping images)"""
-    images: Dict[Literal["hat", "hoodie", "extra", "pants", "shoes"], HttpUrl]
+    """Request model for outfit-single (v2) collage video (6 overlapping images)"""
+    images: Dict[Literal["hat", "hoodie", "extra", "meme", "pants", "shoes"], HttpUrl]
     main_title: str = Field("Choose your outfit:", min_length=1, max_length=200)
     subtitle: str = Field("(shop in bio)", min_length=0, max_length=200)
     title_font_size: Optional[int] = Field(None, ge=48, le=120)
@@ -488,7 +488,7 @@ class OutfitSingleRequest(BaseModel):
     @classmethod
     def validate_image_keys(cls, v: Dict[str, HttpUrl]) -> Dict[str, HttpUrl]:
         """Ensure all required slot keys are present"""
-        required = {"hat", "hoodie", "extra", "pants", "shoes"}
+        required = {"hat", "hoodie", "extra", "meme", "pants", "shoes"}
         missing = required - set(v.keys())
         extra_keys = set(v.keys()) - required
         if missing:

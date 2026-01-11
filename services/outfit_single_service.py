@@ -47,18 +47,19 @@ class OutfitSingleService:
     # Main images (hat, hoodie, pants, shoes) are centered horizontally
     # Extra is smaller and right-aligned
     SLOT_LAYOUT = {
-        "hoodie": {"pos": (270, 590), "size": 540},   # centered: (1080-540)/2 = 270, bigger, lower
+        "hoodie": {"pos": (270, 590), "size": 540},   # centered: (1080-540)/2 = 270
         "hat":    {"pos": (365, 320), "size": 350},   # centered: (1080-350)/2 = 365
-        "pants":  {"pos": (290, 1000), "size": 500},  # centered: (1080-500)/2 = 290, bigger, lower
-        "extra":  {"pos": (680, 825), "size": 280},   # moved left from 760
-        "shoes":  {"pos": (370, 1380), "size": 340},  # centered: (1080-340)/2 = 370, smaller, lower
+        "pants":  {"pos": (290, 1060), "size": 500},  # centered, +60px down
+        "extra":  {"pos": (680, 825), "size": 280},   # right side meme
+        "meme":   {"pos": (120, 980), "size": 250},   # left side meme (smaller)
+        "shoes":  {"pos": (370, 1450), "size": 340},  # centered, +70px down
     }
 
     # Overlay order controls z-index (later items are on top)
-    OVERLAY_ORDER = ["hoodie", "hat", "pants", "extra", "shoes"]
+    OVERLAY_ORDER = ["hoodie", "hat", "meme", "pants", "extra", "shoes"]
 
     # Input order for API (matches request schema field order)
-    INPUT_ORDER = ["hat", "hoodie", "extra", "pants", "shoes"]
+    INPUT_ORDER = ["hat", "hoodie", "extra", "meme", "pants", "shoes"]
 
     def __init__(self):
         self.download_service = DownloadService()
