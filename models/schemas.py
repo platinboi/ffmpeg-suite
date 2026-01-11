@@ -512,8 +512,8 @@ class RembgRequest(BaseModel):
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Model selection - isnet-general-use provides best edge quality
-    model: Optional[str] = Field("isnet-general-use", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Model selection - birefnet-general provides best quality results
+    model: Optional[str] = Field("birefnet-general", pattern=r'^[a-zA-Z0-9_-]+$')
     # Alpha matting for cleaner edges (ENABLED by default for better quality, especially white-on-white)
     alpha_matting: Optional[bool] = True
     foreground_threshold: Optional[int] = Field(210, ge=0, le=255)
@@ -521,7 +521,7 @@ class RembgRequest(BaseModel):
     erode_size: Optional[int] = Field(5, ge=0, le=50)
     # Post-processing for smoother mask edges
     post_process_mask: Optional[bool] = True
-    bgcolor: Optional[List[int]] = Field([255, 255, 255, 255], min_length=4, max_length=4)
+    bgcolor: Optional[List[int]] = Field(None, min_length=4, max_length=4)
 
 
 class RembgResponse(BaseModel):
