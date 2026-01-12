@@ -512,10 +512,10 @@ class RembgRequest(BaseModel):
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Model selection - isnet-general-use provides best accuracy (IoU 0.82)
-    model: Optional[str] = Field("isnet-general-use", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Alpha matting - balanced settings (not too aggressive for white items)
-    alpha_matting: Optional[bool] = True
+    # Model selection - birefnet-general provides best quality for all items
+    model: Optional[str] = Field("birefnet-general", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Alpha matting disabled - causes memory issues and holes in white items
+    alpha_matting: Optional[bool] = False
     foreground_threshold: Optional[int] = Field(240, ge=0, le=255)
     background_threshold: Optional[int] = Field(15, ge=0, le=255)
     erode_size: Optional[int] = Field(8, ge=0, le=50)
