@@ -512,13 +512,13 @@ class RembgRequest(BaseModel):
     image_url: HttpUrl
     response_format: Optional[Literal["binary", "url"]] = "url"
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Model selection - u2net provides best quality/efficiency balance
-    model: Optional[str] = Field("u2net", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Alpha matting for cleaner edges (ENABLED by default for better quality, especially white-on-white)
+    # Model selection - isnet-general-use provides best accuracy (IoU 0.82)
+    model: Optional[str] = Field("isnet-general-use", pattern=r'^[a-zA-Z0-9_-]+$')
+    # Alpha matting for cleaner edges - tuned for no white halos
     alpha_matting: Optional[bool] = True
-    foreground_threshold: Optional[int] = Field(210, ge=0, le=255)
-    background_threshold: Optional[int] = Field(10, ge=0, le=255)
-    erode_size: Optional[int] = Field(5, ge=0, le=50)
+    foreground_threshold: Optional[int] = Field(270, ge=0, le=255)
+    background_threshold: Optional[int] = Field(20, ge=0, le=255)
+    erode_size: Optional[int] = Field(15, ge=0, le=50)
     # Post-processing for smoother mask edges
     post_process_mask: Optional[bool] = True
     bgcolor: Optional[List[int]] = Field(None, min_length=4, max_length=4)
