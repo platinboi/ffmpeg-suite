@@ -514,11 +514,11 @@ class RembgRequest(BaseModel):
     folder: Optional[str] = Field("rembg", pattern=r'^[a-zA-Z0-9_-]+$')
     # Model selection - isnet-general-use provides best accuracy (IoU 0.82)
     model: Optional[str] = Field("isnet-general-use", pattern=r'^[a-zA-Z0-9_-]+$')
-    # Alpha matting for cleaner edges - tuned for no white halos
+    # Alpha matting - balanced settings (not too aggressive for white items)
     alpha_matting: Optional[bool] = True
-    foreground_threshold: Optional[int] = Field(270, ge=0, le=255)
-    background_threshold: Optional[int] = Field(20, ge=0, le=255)
-    erode_size: Optional[int] = Field(15, ge=0, le=50)
+    foreground_threshold: Optional[int] = Field(240, ge=0, le=255)
+    background_threshold: Optional[int] = Field(15, ge=0, le=255)
+    erode_size: Optional[int] = Field(8, ge=0, le=50)
     # Post-processing for smoother mask edges
     post_process_mask: Optional[bool] = True
     bgcolor: Optional[List[int]] = Field(None, min_length=4, max_length=4)
